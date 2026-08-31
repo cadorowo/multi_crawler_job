@@ -30,11 +30,36 @@ const WORKSPACE = resolve(process.cwd(), '../../');
 const AGY_BIN = process.env.AGY_BIN || 'agy';
 const AGY_TIMEOUT_MS = 5 * 60 * 1000; // 5 min max per agy call
 
+const CONV_ID_FILE = resolve(process.cwd(), '.bridge_conversation_id');
 const API = `https://api.telegram.org/bot${TOKEN}`;
+
+// ── Load or bootstrap the dedicated bridge conversation ID ───────────────────
+//
+// The bridge runs every Telegram message as a new TURN in the same dedicated
+// agy conversation. This gives the agent:
+//   • AGENTS.md context (loaded on session start from project root)
+//   • Full memory of all prior Telegram turns across bridge restarts
+//   • No bleed-in from other agy sessions (IDE, CLI, etc.)
+//
+let BRIDGE_CONV_ID: string | null = null;
+
+function loadConvId(): string | null {
+  try {
+    const raw = fs.readFileSync(CONV_ID_FILE, 'utf-8').trim();
+    return raw || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveConvId(id: string) {
+  fs.writeFileSync(CONV_ID_FILE, id + '\n', 'utf-8');
+}
 
 // ── State ────────────────────────────────────────────────────────────────────
 let lastUpdateId = 0;
 const pendingMessages = new Map<number, boolean>(); // chatId → busy
+
 
 // ── Telegram helpers ─────────────────────────────────────────────────────────
 async function tgFetch(method: string, body: Record<string, unknown> = {}) {
@@ -54,11 +79,23 @@ async function getUpdates() {
   });
 }
 
-async function sendMessage(chatId: number, text: string, replyToId?: number, useMarkdown = false) {
+function formatForTelegram(text: string): string {
+  let cleaned = text;
+  // Convert standard markdown bold **word** to Telegram *word*
+  cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, '*$1*');
+  // Convert markdown headers ### Title to *Title*
+  cleaned = cleaned.replace(/^#{1,6}\s*(.+)$/gm, '*$1*');
+  // Strip internal local file URIs like [file.json](file:///Users/...) -> `file.json`
+  cleaned = cleaned.replace(/\[([^\]]+)\]\(file:\/\/[^\)]+\)/g, '`$1`');
+  return cleaned;
+}
+
+async function sendMessage(chatId: number, text: string, replyToId?: number, useMarkdown = true) {
   const MAX = 4096;
+  const formatted = useMarkdown ? formatForTelegram(text) : text;
   const chunks: string[] = [];
-  for (let i = 0; i < text.length; i += MAX) {
-    chunks.push(text.slice(i, i + MAX));
+  for (let i = 0; i < formatted.length; i += MAX) {
+    chunks.push(formatted.slice(i, i + MAX));
   }
   for (const chunk of chunks) {
     const payload: Record<string, unknown> = {
@@ -89,19 +126,22 @@ async function sendTyping(chatId: number) {
 
 // ── AGY CLI call ─────────────────────────────────────────────────────────────
 //
-// We use --continue so every Telegram message is a new turn in the SAME
-// ongoing agy conversation. This gives the agent full persistent memory of:
-//   • The project structure and AGENTS.md context
-//   • Previous user requests and what was done
-//   • Files already read/modified this session
+// Every Telegram message is a new turn in the DEDICATED bridge agy conversation
+// identified by BRIDGE_CONV_ID (stored in packages/bot/.bridge_conversation_id).
+// This gives the agent persistent memory across bridge restarts, isolated from
+// other agy sessions (IDE, other CLI runs, etc.).
 //
 async function callAgy(prompt: string): Promise<string> {
-  // Escape single quotes for shell safety
   const safePrompt = prompt.replace(/'/g, "'\\''");
-  const cmd = `${AGY_BIN} --print '${safePrompt}' --continue --dangerously-skip-permissions`;
 
-  console.log(`\n🤖 Calling agy (--continue):\n   cwd: ${WORKSPACE}\n   cmd: ${cmd.slice(0, 160)}...`);
+  // Use dedicated conversation ID if we have one, otherwise fall back to --continue
+  const convFlag = BRIDGE_CONV_ID
+    ? `--conversation ${BRIDGE_CONV_ID}`
+    : '--continue';
 
+  const cmd = `${AGY_BIN} --print '${safePrompt}' ${convFlag} --dangerously-skip-permissions`;
+
+  console.log(`\n🤖 Calling agy [conv: ${BRIDGE_CONV_ID ?? 'latest'}]:\n   cmd: ${cmd.slice(0, 160)}...`);
 
   try {
     const { stdout, stderr } = await execAsync(cmd, {
@@ -113,6 +153,7 @@ async function callAgy(prompt: string): Promise<string> {
     const out = (stdout || '').trim();
     const err = (stderr || '').trim();
     return out || err || '_(no output)_';
+
   } catch (e: any) {
     const out = (e.stdout || '').trim();
     if (out) return out; // still return partial output
@@ -164,9 +205,8 @@ async function handleMessage(msg: any) {
 
     console.log(`   ✅ AGY responded (${result.length} chars)`);
 
-    // Prefix with a header
-    const reply = `🤖 *AGY Response:*\n\n${result}`;
-    await sendMessage(chatId, reply, msgId, true);
+    // Send directly without robot wrapper prefix
+    await sendMessage(chatId, result, msgId, true);
   } catch (err: any) {
     console.error(`   ❌ AGY error:`, err.message);
     await sendMessage(chatId, `❌ *Error running AGY:*\n\`${err.message}\``, msgId, true);
@@ -177,13 +217,22 @@ async function handleMessage(msg: any) {
 
 // ── Polling loop ──────────────────────────────────────────────────────────────
 async function poll() {
+  // Load the dedicated bridge conversation ID
+  BRIDGE_CONV_ID = loadConvId();
+
   console.log('═══════════════════════════════════════════════════════════════════════════════');
   console.log(' 🌉 PASEO BRIDGE — Telegram ↔ AGY CLI');
   console.log(` 📁 Workspace: ${WORKSPACE}`);
   console.log(` 🤖 AGY binary: ${AGY_BIN}`);
   console.log(` 👥 Allowed users: ${ALLOWED_IDS.join(', ')}`);
+  if (BRIDGE_CONV_ID) {
+    console.log(` 🧠 Bridge conversation: ${BRIDGE_CONV_ID}  (persistent, isolated)`);
+  } else {
+    console.log(` ⚠️  No bridge conversation ID found — will use --continue (run bootstrap first)`);
+  }
   console.log('═══════════════════════════════════════════════════════════════════════════════\n');
   console.log('🔄 Long-polling Telegram… (ctrl+C to stop)\n');
+
 
   while (true) {
     try {
