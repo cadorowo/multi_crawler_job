@@ -1,0 +1,26 @@
+[
+  {
+    "id": "li-job-89218",
+    "site": "linkedin",
+    "job_url": "https://www.linkedin.com/jobs/view/89218",
+    "job_url_direct": "https://careers.barcelonastudio.com/jobs/89218",
+    "title": "UX / UI Design Intern - AI Products",
+    "company": "Barcelona Creative Studio",
+    "location": "Barcelona, Catalonia, Spain",
+    "date_posted": "2026-03-01",
+    "job_type": "internship",
+    "salary_source": "direct_data",
+    "interval": "monthly",
+    "min_amount": 1000,
+    "max_amount": 1400,
+    "currency": "EUR",
+    "is_remote": false,
+    "job_level": "Internship",
+    "job_function": "Design",
+    "listing_type": "job",
+    "emails": ["careers@barcelonastudio.com"],
+    "description": "<p>We are looking for an ambitious UX / UI Design Intern to craft AI tools in Figma and Framer.</p><ul><li>Design responsive web interfaces.</li><li>Work with design tokens and design systems.</li></ul>",
+    "company_industry": "Design & Software",
+    "company_url": "https://barcelonastudio.com"
+  }
+]

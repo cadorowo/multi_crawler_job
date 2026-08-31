@@ -1,0 +1,27 @@
+{
+  "name": "barcelona-internship-bot-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "db:generate": "pnpm --filter @bcn-intern-bot/db db:generate",
+    "db:migrate": "pnpm --filter @bcn-intern-bot/db db:migrate",
+    "db:push": "pnpm --filter @bcn-intern-bot/db db:push",
+    "db:studio": "pnpm --filter @bcn-intern-bot/db db:studio",
+    "db:seed": "pnpm --filter @bcn-intern-bot/db db:seed",
+    "bot:dev": "pnpm --filter @bcn-intern-bot/bot dev",
+    "bot:start": "pnpm --filter @bcn-intern-bot/bot start",
+    "worker:dev": "pnpm --filter @bcn-intern-bot/worker dev",
+    "worker:start": "pnpm --filter @bcn-intern-bot/worker start",
+    "test": "pnpm -r --filter=./packages/* run test",
+    "build": "pnpm -r --filter=./packages/* run build",
+    "typecheck": "pnpm -r --filter=./packages/* run typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "dotenv": "^16.4.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

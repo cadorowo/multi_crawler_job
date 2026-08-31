@@ -1,0 +1,45 @@
+{
+  "jobs": [
+    {
+      "id": 4892019,
+      "title": "Software Engineer Intern - Backend (Summer 2026)",
+      "absolute_url": "https://boards.greenhouse.io/typeform/jobs/4892019",
+      "internal_job_id": 91823,
+      "location": {
+        "name": "Barcelona, Spain"
+      },
+      "departments": [
+        {
+          "id": 101,
+          "name": "Engineering"
+        }
+      ],
+      "offices": [
+        {
+          "id": 55,
+          "name": "Barcelona Hub",
+          "location": "Barcelona"
+        }
+      ],
+      "updated_at": "2026-03-01T10:30:00Z",
+      "content": "<p>Join Typeform as a Backend Engineering Intern in our Barcelona office!</p><h3>What you will do:</h3><ul><li>Work on microservices using Node.js and TypeScript.</li><li>Participate in agile sprints.</li></ul><p>Salary: €24,000 - €28,000 yearly.</p>"
+    },
+    {
+      "id": 4892020,
+      "title": "Product Design Intern",
+      "absolute_url": "https://boards.greenhouse.io/typeform/jobs/4892020",
+      "location": {
+        "name": "Remote (Spain)"
+      },
+      "departments": [
+        {
+          "id": 102,
+          "name": "Design"
+        }
+      ],
+      "offices": [],
+      "updated_at": "2026-02-28T14:15:00Z",
+      "content": "<p>Looking for a creative Product Design Intern to help craft intuitive interfaces.</p>"
+    }
+  ]
+}

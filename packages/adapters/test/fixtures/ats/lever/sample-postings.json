@@ -1,0 +1,27 @@
+[
+  {
+    "id": "e391b49a-5f33-4f2b-98b7-6b4512984ef2",
+    "text": "Junior Full Stack Developer / Intern",
+    "hostedUrl": "https://jobs.lever.co/kantox/e391b49a-5f33-4f2b-98b7-6b4512984ef2",
+    "applyUrl": "https://jobs.lever.co/kantox/e391b49a-5f33-4f2b-98b7-6b4512984ef2/apply",
+    "categories": {
+      "commitment": "Internship",
+      "department": "Engineering",
+      "location": "Barcelona",
+      "team": "Core Banking",
+      "allLocations": ["Barcelona, Spain"]
+    },
+    "description": "<p>Kantox is looking for a motivated Full Stack Intern to build modern FX automation features.</p>",
+    "descriptionPlain": "Kantox is looking for a motivated Full Stack Intern to build modern FX automation features.",
+    "workplaceType": "hybrid",
+    "createdAt": 1772361600000,
+    "lists": [
+      {
+        "text": "Requirements",
+        "content": "<ul><li>Knowledge of Ruby, Python, or TypeScript.</li><li>Experience with React.</li></ul>"
+      }
+    ],
+    "additional": "<p>Competitive intern stipend provided.</p>",
+    "additionalPlain": "Competitive intern stipend provided."
+  }
+]

@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "id": "782910",
+      "type": "jobs",
+      "attributes": {
+        "title": "Data Science & AI Intern",
+        "body": "<p>Domestic Data Streamers is looking for a curious AI & Data Design Intern in Poblenou, Barcelona.</p>",
+        "pitch": "Design interactive installations and intelligent models.",
+        "created-at": "2026-02-25T11:00:00.000Z",
+        "updated-at": "2026-02-25T11:00:00.000Z",
+        "remote-status": "hybrid",
+        "locations-text": "Barcelona, Spain",
+        "city": "Barcelona",
+        "country": "Spain",
+        "department": "Research & Creative Tech"
+      },
+      "links": {
+        "careersite-job-url": "https://domesticstreamers.teamtailor.com/jobs/782910-data-science-ai-intern"
+      }
+    }
+  ]
+}

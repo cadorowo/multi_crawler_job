@@ -1,0 +1,20 @@
+{
+  "data": [
+    {
+      "id": "fac-job-501",
+      "title": "Junior Product Designer (Prácticas / Intern)",
+      "location": "Barcelona, Catalonia, Spain",
+      "city": "Barcelona",
+      "country": "Spain",
+      "contract_type": "internship",
+      "workplace": "hybrid",
+      "description": "<p>Factorial is looking for a talented Product Design Intern to help shape user experiences across desktop and mobile.</p>",
+      "url": "https://factorial.factorialhr.com/job_postings/fac-job-501",
+      "published_at": "2026-02-28T08:30:00Z",
+      "department": "Design",
+      "team": {
+        "name": "Design Systems"
+      }
+    }
+  ]
+}

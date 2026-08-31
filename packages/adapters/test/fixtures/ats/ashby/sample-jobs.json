@@ -1,0 +1,32 @@
+{
+  "apiVersion": "1.0",
+  "jobs": [
+    {
+      "id": "c88f2190-7d31-48e2-9ef8-823901b22301",
+      "title": "Software Engineering Intern - Frontend",
+      "department": "Product Engineering",
+      "location": "Barcelona, Spain",
+      "isRemote": false,
+      "jobUrl": "https://jobs.ashbyhq.com/coverflex/c88f2190-7d31-48e2-9ef8-823901b22301",
+      "applyUrl": "https://jobs.ashbyhq.com/coverflex/c88f2190-7d31-48e2-9ef8-823901b22301/application",
+      "employmentType": "Internship",
+      "publishedAt": "2026-03-01T09:00:00.000Z",
+      "descriptionHtml": "<div><p>Join Coverflex to build the future of employee compensation and flexible benefits in Barcelona.</p></div>",
+      "descriptionPlain": "Join Coverflex to build the future of employee compensation and flexible benefits in Barcelona.",
+      "secondaryLocations": [
+        {
+          "location": "Sant Cugat del Vallès"
+        }
+      ],
+      "compensation": {
+        "compensationTierSummary": "€1,200 - €1,500 / month",
+        "targetCompensation": {
+          "minValue": 1200,
+          "maxValue": 1500,
+          "currency": "EUR",
+          "interval": "monthly"
+        }
+      }
+    }
+  ]
+}

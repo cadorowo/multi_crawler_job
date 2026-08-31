@@ -1,0 +1,23 @@
+{
+  "name": "Lodgify",
+  "description": "Vacation rental software",
+  "jobs": [
+    {
+      "shortcode": "LDGFY-INT-2026",
+      "title": "Software Developer Intern - Backend (Java / .NET)",
+      "url": "https://apply.workable.com/lodgify/j/LDGFY-INT-2026/",
+      "application_url": "https://apply.workable.com/lodgify/j/LDGFY-INT-2026/apply/",
+      "department": "Engineering",
+      "city": "Barcelona",
+      "country": "Spain",
+      "state": "Catalonia",
+      "telecommuting": false,
+      "workplace": "hybrid",
+      "employment_type": "Internship",
+      "published_on": "2026-03-01",
+      "description": "<p>Lodgify is seeking a motivated Software Developer Intern to join our core backend engineering team in Barcelona.</p>",
+      "requirements": "<ul><li>Computer Science degree student.</li><li>Knowledge of C# / .NET or Java.</li></ul>",
+      "benefits": "<p>Paid internship with mentorship and flexible hours.</p>"
+    }
+  ]
+}
