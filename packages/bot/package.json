@@ -9,7 +9,9 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "start": "tsx src/index.ts",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "test:live": "tsx src/test_live.ts",
+    "bridge": "tsx src/paseo_bridge.ts"
   },
   "dependencies": {
     "@bcn-intern-bot/adapters": "workspace:*",
