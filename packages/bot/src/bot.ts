@@ -752,6 +752,12 @@ bot.api.setMyCommands([
   { command: 'help', description: 'Command directory' },
 ]);
 
+// ── Global Error Handler ───────────────────────────────────────────────────────
+
+bot.catch((err) => {
+  console.error('❌ Unhandled error in bot middleware:', err.error);
+});
+
 // ── Start Listener ────────────────────────────────────────────────────────────
 
 bot.start({

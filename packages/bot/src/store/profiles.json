@@ -18,6 +18,9 @@
       "smartrecruiters-419662"
     ],
     "createdAt": "2026-08-31T12:33:43.565Z",
-    "updatedAt": "2026-08-31T12:35:02.451Z"
+    "updatedAt": "2026-08-31T12:42:26.410Z",
+    "targetCities": [
+      "Milan"
+    ]
   }
 }

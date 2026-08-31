@@ -131,7 +131,7 @@ export function getTopMatches(
     .map(j => ({
       ...j,
       tailoredScore: scoreJob(j, profile),
-      companyWebsite: job.companyWebsite || getCompanyWebsite(j.company),
+      companyWebsite: j.companyWebsite || getCompanyWebsite(j.company),
     }))
     .sort((a, b) => b.tailoredScore - a.tailoredScore)
     .slice(offset, offset + count);
