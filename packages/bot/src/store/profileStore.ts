@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import { resolve } from 'node:path';
-import type { CandidateProfile, DisciplineKey, ContractKey, LocationKey } from './types.js';
+import type { CandidateProfile, DisciplineKey, ContractKey } from './types.js';
 
 const PROFILES_FILE = resolve(process.cwd(), 'src/store/profiles.json');
 
@@ -34,11 +34,13 @@ export function createProfile(
   firstName: string,
   discipline: DisciplineKey,
   contractTypes: ContractKey[],
-  targetLocation: LocationKey,
+  targetCities: string[] = ['Milan', 'Barcelona'],
+  targetRoles: string[] = [],
   skills: string[] = [],
   university = '',
   country = '',
   language = 'English',
+  environment: 'startup' | 'scaleup' | 'any' = 'any',
 ): CandidateProfile {
   const now = new Date().toISOString();
   return {
@@ -46,12 +48,14 @@ export function createProfile(
     telegramUsername,
     firstName,
     discipline,
+    targetCities,
+    targetRoles,
     university,
     country,
     contractTypes,
     skills,
-    targetLocation,
     language,
+    environment,
     appliedIds: [],
     savedIds: [],
     dismissedIds: [],

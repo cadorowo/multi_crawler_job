@@ -8,30 +8,41 @@ export type DisciplineKey =
   | 'finance'
   | 'operations';
 
-export type ContractKey = 'erasmus' | 'convenio' | 'any';
+export type ContractKey = 'erasmus' | 'stage_curriculare' | 'convenio' | 'any';
 
-export type LocationKey = 'barcelona' | 'spain' | 'europe';
+export type CityKey =
+  | 'barcelona'
+  | 'milan'
+  | 'london'
+  | 'berlin'
+  | 'amsterdam'
+  | 'paris'
+  | 'madrid'
+  | 'remote'
+  | 'europe';
 
 export interface CandidateProfile {
   telegramId: number;
   telegramUsername: string;
   firstName: string;
 
-  // Job search preferences
+  // Job search preferences & alignment
   discipline: DisciplineKey;
+  targetCities: string[];
+  targetRoles: string[];
   university: string;
   country: string;
   contractTypes: ContractKey[];
   skills: string[];
-  targetLocation: LocationKey;
   language: string;
+  environment: 'startup' | 'scaleup' | 'any';
 
   // Interaction history
   appliedIds: string[];
   savedIds: string[];
   dismissedIds: string[];
 
-  // CV ingestion
+  // CV / OCR ingestion
   cvRawText?: string;
   cvExtractedSkills?: string[];
   cvExtractedUniversity?: string;
@@ -45,6 +56,7 @@ export interface CandidateProfile {
 export interface JobItem {
   id: string;
   company: string;
+  companyWebsite?: string;
   title: string;
   location: string;
   ats: string;
@@ -99,14 +111,21 @@ export const DISCIPLINES: Record<DisciplineKey, { label: string; emoji: string; 
   },
 };
 
-export const CONTRACTS: Record<ContractKey, { label: string; emoji: string }> = {
-  erasmus: { label: 'Erasmus+ Traineeship', emoji: '🇪🇺' },
-  convenio: { label: 'Convenio de Prácticas', emoji: '🇪🇸' },
-  any: { label: 'Any Contract', emoji: '🔓' },
+export const CITIES: Record<CityKey, { label: string; emoji: string; city: string }> = {
+  milan: { label: 'Milan', emoji: '🇮🇹', city: 'Milan' },
+  barcelona: { label: 'Barcelona', emoji: '🇪🇸', city: 'Barcelona' },
+  london: { label: 'London', emoji: '🇬🇧', city: 'London' },
+  berlin: { label: 'Berlin', emoji: '🇩🇪', city: 'Berlin' },
+  amsterdam: { label: 'Amsterdam', emoji: '🇳🇱', city: 'Amsterdam' },
+  paris: { label: 'Paris', emoji: '🇫🇷', city: 'Paris' },
+  madrid: { label: 'Madrid', emoji: '🇪🇸', city: 'Madrid' },
+  remote: { label: '100% Remote', emoji: '🏠', city: 'Remote' },
+  europe: { label: 'All Europe', emoji: '🌍', city: 'Europe' },
 };
 
-export const LOCATIONS: Record<LocationKey, { label: string; emoji: string }> = {
-  barcelona: { label: 'Barcelona Only', emoji: '📌' },
-  spain: { label: 'Anywhere in Spain', emoji: '🇪🇸' },
-  europe: { label: 'All of Europe', emoji: '🌍' },
+export const CONTRACTS: Record<ContractKey, { label: string; emoji: string }> = {
+  erasmus: { label: 'Erasmus+ Traineeship', emoji: '🇪🇺' },
+  stage_curriculare: { label: 'Stage Curriculare (IT)', emoji: '🇮🇹' },
+  convenio: { label: 'Convenio de Prácticas (ES)', emoji: '🇪🇸' },
+  any: { label: 'Any Contract / Placement', emoji: '🔓' },
 };

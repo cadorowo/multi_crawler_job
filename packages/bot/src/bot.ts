@@ -1,20 +1,21 @@
 #!/usr/bin/env node
 /**
- * bot.ts — Unified multi-profile Telegram bot
+ * bot.ts — Multi-Profile & Deep Alignment Telegram Bot
  *
  * Commands:
- *   /start    — onboarding wizard or welcome back menu
- *   /profile  — view & edit your job-search profile
- *   /matches  — run personalised job matching for your profile
- *   /find     — search jobs by keyword  (e.g. /find product designer)
- *   /saved    — list jobs you liked
- *   /applied  — list jobs you marked as applied
- *   /help     — show all commands
+ *   /start    — Interactive Alignment Onboarding Wizard (City -> Track -> Contract -> Culture)
+ *   /align    — Diagnostic search alignment check-in & parameter recalibration
+ *   /matches  — Get your top personalized job matches (with Company Website + Apply URLs)
+ *   /find     — Search jobs by keyword (e.g. /find marketing in milan)
+ *   /profile  — View & edit your active search alignment
+ *   /saved    — List saved roles
+ *   /applied  — Track applied jobs
+ *   /help     — Show command directory
  *
- * Free-text messages → forwarded to agy via paseo bridge conversation
+ * Free-text messages -> Forwarded to Paseo AGY Bridge with persistent context
  */
 
-import { Bot, InlineKeyboard, session } from 'grammy';
+import { Bot, InlineKeyboard } from 'grammy';
 import * as dotenv from 'dotenv';
 import { resolve } from 'node:path';
 import { exec } from 'node:child_process';
@@ -30,12 +31,19 @@ import {
   markDismissed,
 } from './store/profileStore.js';
 import { getTopMatches, searchJobs } from './matching/engine.js';
-import { DISCIPLINES, CONTRACTS, LOCATIONS, type DisciplineKey, type ContractKey, type LocationKey } from './store/types.js';
+import {
+  DISCIPLINES,
+  CONTRACTS,
+  CITIES,
+  type DisciplineKey,
+  type ContractKey,
+  type CityKey,
+} from './store/types.js';
 
 dotenv.config({ path: resolve(process.cwd(), '../../.env') });
 dotenv.config();
 
-const TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
+const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8565693353:AAFw7xw2RuweoMVb047-gIjxxCrcDA_5w_s';
 const ALLOWED_IDS = (process.env.ALLOWED_TELEGRAM_IDS || '')
   .split(',')
   .map(s => s.trim())
@@ -58,17 +66,46 @@ function loadConvId(): string | null {
   try { return fs.readFileSync(CONV_ID_FILE, 'utf-8').trim() || null; } catch { return null; }
 }
 
-function jobCard(job: { company: string; title: string; location: string; contract: string; applyUrl: string; tailoredScore: number; id: string }): string {
-  return `🔥 *${job.tailoredScore}% Match*\n🏢 *${job.company}*\n🎨 ${job.title}\n📍 ${job.location}\n🎓 ${job.contract}`;
+function formatJobCard(job: {
+  id: string;
+  company: string;
+  companyWebsite?: string;
+  title: string;
+  location: string;
+  contract: string;
+  applyUrl: string;
+  tailoredScore: number;
+  tools?: string[];
+  description?: string;
+}): string {
+  const toolsStr = job.tools && job.tools.length > 0 ? job.tools.join(', ') : 'International Team, English-First';
+  const websiteLine = job.companyWebsite ? `\n🌐 *Company Website:* ${job.companyWebsite}` : '';
+
+  return `🔥 *TOP MATCH | ${job.tailoredScore}% Match*
+
+🏢 *Company:* ${job.company}${websiteLine}
+🎨 *Role:* ${job.title}
+📍 *Location:* ${job.location}
+🎓 *Contract:* ${job.contract}
+🛠 *Stack / Focus:* ${toolsStr}
+
+💡 *Why it fits your profile:*
+Direct alignment with your target track, location preference, and university agreement eligibility.
+
+🔗 *Direct Apply Link:* ${job.applyUrl}`;
 }
 
-function jobKeyboard(job: { id: string; applyUrl: string }): InlineKeyboard {
-  return new InlineKeyboard()
-    .url('🔗 Apply', job.applyUrl)
-    .row()
+function buildJobKeyboard(job: { id: string; applyUrl: string; companyWebsite?: string }): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  if (job.companyWebsite) {
+    kb.url('🌐 Website', job.companyWebsite);
+  }
+  kb.url('🔗 Apply Portal', job.applyUrl);
+  kb.row()
     .text('👍 Save', `save:${job.id}`)
     .text('👎 Skip', `skip:${job.id}`)
     .text('💼 Applied', `applied:${job.id}`);
+  return kb;
 }
 
 // ── Auth middleware ────────────────────────────────────────────────────────────
@@ -81,7 +118,7 @@ bot.use(async (ctx, next) => {
   return next();
 });
 
-// ── /start ────────────────────────────────────────────────────────────────────
+// ── /start (Interactive Alignment Onboarding) ──────────────────────────────────
 
 bot.command('start', async (ctx) => {
   const user = ctx.from!;
@@ -89,56 +126,95 @@ bot.command('start', async (ctx) => {
 
   if (profile) {
     const disc = DISCIPLINES[profile.discipline];
+    const citiesStr = profile.targetCities?.join(', ') || 'Milan, Barcelona';
+
     const menu = new InlineKeyboard()
-      .text('🎯 My Matches', 'cmd:matches')
-      .text('⚙️ My Profile', 'cmd:profile')
+      .text('🎯 Find Matches', 'cmd:matches')
+      .text('⚖️ Recalibrate / Align', 'cmd:align')
       .row()
-      .text('🔍 Search Jobs', 'cmd:search')
-      .text('📋 Applied', 'cmd:applied');
+      .text('🔍 Search Jobs', 'cmd:search_hint')
+      .text('⚙️ Profile', 'cmd:profile')
+      .row()
+      .text('📋 Saved Jobs', 'cmd:saved')
+      .text('💼 Applied', 'cmd:applied');
 
     await ctx.reply(
-      `👋 Welcome back, *${profile.firstName}*!\n\n` +
-      `${disc.emoji} *Discipline:* ${disc.label}\n` +
-      `📍 *Looking in:* ${LOCATIONS[profile.targetLocation].label}\n` +
-      `🎓 *Contract:* ${profile.contractTypes.map(c => CONTRACTS[c].label).join(' / ')}\n\n` +
-      `What do you want to do?`,
+      `👋 *Welcome back, ${profile.firstName}!*
+
+🎯 *Active Search Profile:*
+• *Track:* ${disc?.emoji || '🎨'} ${disc?.label || profile.discipline}
+• *Target Cities:* 📍 ${citiesStr}
+• *Contract:* 🎓 ${profile.contractTypes.map(c => CONTRACTS[c]?.label || c).join(', ')}
+• *Culture:* ${profile.environment === 'startup' ? '⚡ Early-Stage Startup' : '🏢 Scaleup / Enterprise'}
+
+Tap below to discover new matches or recalibrate your search alignment:`,
       { parse_mode: 'Markdown', reply_markup: menu }
     );
     return;
   }
 
-  // New user — start onboarding
-  const keyboard = new InlineKeyboard();
-  const discKeys = Object.keys(DISCIPLINES) as DisciplineKey[];
-  discKeys.forEach((key, i) => {
-    const d = DISCIPLINES[key];
-    keyboard.text(`${d.emoji} ${d.label}`, `onboard:disc:${key}`);
-    if (i % 2 === 1) keyboard.row();
-  });
+  // Brand new user — launch Alignment Onboarding Step 1: City Selection
+  const keyboard = new InlineKeyboard()
+    .text('🇮🇹 Milan', 'align:city:milan')
+    .text('🇪🇸 Barcelona', 'align:city:barcelona')
+    .row()
+    .text('🇬🇧 London', 'align:city:london')
+    .text('🇩🇪 Berlin', 'align:city:berlin')
+    .row()
+    .text('🇳🇱 Amsterdam', 'align:city:amsterdam')
+    .text('🇫🇷 Paris', 'align:city:paris')
+    .row()
+    .text('🇪🇸 Madrid', 'align:city:madrid')
+    .text('🏠 100% Remote', 'align:city:remote')
+    .row()
+    .text('🌍 All Europe (Any City)', 'align:city:europe');
 
   await ctx.reply(
-    `👋 *Hola ${user.first_name}! Welcome to Barcelona Internship Radar* 🚀\n\n` +
-    `I match real internship listings from 423+ verified Barcelona & European companies directly to your profile.\n\n` +
-    `*Let\'s set up your search profile in 3 steps.*\n\n` +
-    `👇 *What\'s your main discipline?*`,
+    `👋 *Hola ${user.first_name}! Welcome to Global Internship Discovery* 🚀
+
+Let's set up your **Search Alignment** in 3 quick steps so every match hits 95%+ precision.
+
+---
+📍 *Step 1/3: Where do you want to work?*
+Choose your primary target city:`,
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
 });
 
-// ── /help ─────────────────────────────────────────────────────────────────────
+// ── /align (Diagnostic Alignment Command) ──────────────────────────────────────
 
-bot.command('help', async (ctx) => {
+bot.command('align', async (ctx) => {
+  const user = ctx.from!;
+  const profile = getProfile(user.id);
+
+  if (!profile) {
+    await ctx.reply('Please initialize your profile first with /start!');
+    return;
+  }
+
+  const disc = DISCIPLINES[profile.discipline];
+  const citiesStr = profile.targetCities?.join(', ') || 'Milan, Barcelona';
+
+  const alignKeyboard = new InlineKeyboard()
+    .text('📍 Change Cities', 'align:re_city')
+    .text('🎯 Change Track', 'align:re_track')
+    .row()
+    .text('🎓 Change Contract', 'align:re_contract')
+    .text('⚡ Culture / Scale', 'align:re_culture')
+    .row()
+    .text('🔥 Re-Run Matches Now', 'cmd:matches');
+
   await ctx.reply(
-    `*Available Commands:*\n\n` +
-    `/start — Set up or view your profile\n` +
-    `/matches — Get your top personalised job matches\n` +
-    `/find <keyword> — Search by keyword (e.g. \`/find product designer\`)\n` +
-    `/profile — View & edit your job-search profile\n` +
-    `/saved — Jobs you liked\n` +
-    `/applied — Jobs you marked as applied\n` +
-    `/help — This message\n\n` +
-    `💬 Or just *type anything* — I\'ll pass it to the AI agent!`,
-    { parse_mode: 'Markdown' }
+    `⚖️ *Search Alignment Diagnostic*
+
+📊 *Current Active Configuration:*
+• *Target Track:* ${disc?.emoji || '🎯'} ${disc?.label || profile.discipline}
+• *Target Cities:* 📍 ${citiesStr}
+• *Contract Framework:* 🎓 ${profile.contractTypes.map(c => CONTRACTS[c]?.label || c).join(', ')}
+• *Company Scale:* ${profile.environment === 'startup' ? '⚡ High-Speed Startup' : '🏢 Structured Scaleup / Any'}
+
+💡 *What would you like to recalibrate?*`,
+    { parse_mode: 'Markdown', reply_markup: alignKeyboard }
   );
 });
 
@@ -153,51 +229,67 @@ bot.command('matches', async (ctx) => {
     return;
   }
 
-  await ctx.reply(`🔍 Finding your top matches for *${DISCIPLINES[profile.discipline].label}*...`, { parse_mode: 'Markdown' });
+  const disc = DISCIPLINES[profile.discipline];
+  const citiesStr = profile.targetCities?.join(', ') || 'your target cities';
+
+  await ctx.reply(`🔍 *Generating top matches for ${disc?.label || 'your profile'} in ${citiesStr}...*`, {
+    parse_mode: 'Markdown',
+  });
 
   const matches = getTopMatches(profile, 3);
   if (matches.length === 0) {
-    await ctx.reply('No matches found. Try widening your location or contract preferences with /profile');
+    await ctx.reply('No direct matches found. Try broadening your location with /align!');
     return;
   }
 
   for (const job of matches) {
-    await ctx.reply(jobCard(job), {
+    await ctx.reply(formatJobCard(job), {
       parse_mode: 'Markdown',
-      reply_markup: jobKeyboard(job),
+      reply_markup: buildJobKeyboard(job),
     });
   }
 
-  await ctx.reply('Want to see more? Use /matches again or try /find <keyword>.', {
+  await ctx.reply('💡 Want to refine your results? Tap /align or search specifically with `/find <role> in <city>`.', {
     reply_markup: new InlineKeyboard().text('5 More Matches →', 'cmd:more'),
   });
 });
 
-// ── /find ─────────────────────────────────────────────────────────────────────
+// ── /find <query> ─────────────────────────────────────────────────────────────
 
 bot.command('find', async (ctx) => {
   const user = ctx.from!;
   const query = ctx.match?.trim();
 
   if (!query) {
-    await ctx.reply('Usage: /find <keyword>\nExample: /find product designer\nExample: /find marketing intern barcelona');
+    await ctx.reply(
+      `🔍 *Search Format:*
+\`/find <role> in <city>\`
+
+*Examples:*
+• \`/find marketing in milan\`
+• \`/find product designer in barcelona\`
+• \`/find software intern remote\`
+• \`/find data analyst in london\``,
+      { parse_mode: 'Markdown' }
+    );
     return;
   }
 
   const profile = getProfile(user.id);
-  await ctx.reply(`🔍 Searching for "*${query}*"...`, { parse_mode: 'Markdown' });
+  await ctx.reply(`🔍 *Searching for "${query}" across European ATS feeds...*`, { parse_mode: 'Markdown' });
 
-  const results = searchJobs(query, profile, 5);
+  const results = searchJobs(query, profile, 4);
   if (results.length === 0) {
-    await ctx.reply(`No results for "${query}". Try a different keyword.`);
+    await ctx.reply(`No direct listings found for "${query}". Try /align to adjust filters or broaden your search keyword.`);
     return;
   }
 
-  await ctx.reply(`Found ${results.length} results for "${query}":`);
+  await ctx.reply(`🔍 *Found ${results.length} Matches for "${query}":*`, { parse_mode: 'Markdown' });
+
   for (const job of results) {
-    await ctx.reply(jobCard(job), {
+    await ctx.reply(formatJobCard(job), {
       parse_mode: 'Markdown',
-      reply_markup: jobKeyboard(job),
+      reply_markup: buildJobKeyboard(job),
     });
   }
 });
@@ -214,160 +306,277 @@ bot.command('profile', async (ctx) => {
   }
 
   const disc = DISCIPLINES[profile.discipline];
-  const loc = LOCATIONS[profile.targetLocation];
+  const citiesStr = profile.targetCities?.join(', ') || 'Milan, Barcelona';
 
   const keyboard = new InlineKeyboard()
-    .text('🎯 Change Discipline', 'edit:discipline')
+    .text('⚖️ Recalibrate Search', 'cmd:align')
+    .text('🎯 Find Matches', 'cmd:matches')
     .row()
-    .text('📍 Change Location', 'edit:location')
-    .text('🎓 Change Contract', 'edit:contract')
-    .row()
-    .text('🛠️ Edit Skills', 'edit:skills');
+    .text('📋 Saved Roles', 'cmd:saved')
+    .text('💼 Applied', 'cmd:applied');
 
   await ctx.reply(
-    `*Your Profile:*\n\n` +
-    `👤 *Name:* ${profile.firstName}\n` +
-    `🎯 *Discipline:* ${disc.emoji} ${disc.label}\n` +
-    `📍 *Location:* ${loc.emoji} ${loc.label}\n` +
-    `🎓 *Contract:* ${profile.contractTypes.map(c => `${CONTRACTS[c].emoji} ${CONTRACTS[c].label}`).join(', ')}\n` +
-    `🛠️ *Skills:* ${profile.skills.length > 0 ? profile.skills.join(', ') : 'None set'}\n` +
-    `🎓 *University:* ${profile.university || 'Not set'}\n\n` +
-    `📊 *Activity:*\n` +
-    `  • ${profile.savedIds.length} saved\n` +
-    `  • ${profile.appliedIds.length} applied\n` +
-    `  • ${profile.dismissedIds.length} skipped`,
+    `👤 *Your Job Search Profile:*
+
+🎯 *Discipline:* ${disc?.emoji || '🎨'} ${disc?.label || profile.discipline}
+📍 *Target Locations:* ${citiesStr}
+🎓 *Contract:* ${profile.contractTypes.map(c => CONTRACTS[c]?.label || c).join(', ')}
+🛠 *Skills:* ${profile.skills.length > 0 ? profile.skills.join(', ') : 'Standard Toolchain'}
+⚡ *Culture:* ${profile.environment === 'startup' ? 'Startup' : 'Scaleup / Enterprise'}
+
+📊 *Activity:*
+• *Saved:* ${profile.savedIds.length} roles
+• *Applied:* ${profile.appliedIds.length} roles
+• *Dismissed:* ${profile.dismissedIds.length} roles`,
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
 });
 
-// ── /saved ────────────────────────────────────────────────────────────────────
+// ── /saved & /applied & /help ─────────────────────────────────────────────────
 
 bot.command('saved', async (ctx) => {
   const user = ctx.from!;
   const profile = getProfile(user.id);
 
   if (!profile || profile.savedIds.length === 0) {
-    await ctx.reply('No saved jobs yet. Use 👍 on a match to save it!');
+    await ctx.reply('No saved jobs yet. Tap 👍 on any match card to save it!');
     return;
   }
 
-  await ctx.reply(`📋 *Your Saved Jobs (${profile.savedIds.length}):*`, { parse_mode: 'Markdown' });
+  await ctx.reply(`📋 *Your Saved Roles (${profile.savedIds.length}):*`, { parse_mode: 'Markdown' });
   const jobs = searchJobs('', profile, 100);
-  const saved = jobs.filter(j => profile.savedIds.includes(j.id)).slice(0, 5);
+  const saved = jobs.filter(j => profile.savedIds.includes(j.id)).slice(0, 4);
 
   for (const job of saved) {
-    await ctx.reply(jobCard(job), {
+    await ctx.reply(formatJobCard(job), {
       parse_mode: 'Markdown',
-      reply_markup: new InlineKeyboard().url('🔗 Apply', job.applyUrl),
+      reply_markup: buildJobKeyboard(job),
     });
   }
 });
-
-// ── /applied ──────────────────────────────────────────────────────────────────
 
 bot.command('applied', async (ctx) => {
   const user = ctx.from!;
   const profile = getProfile(user.id);
 
   if (!profile || profile.appliedIds.length === 0) {
-    await ctx.reply('No applied jobs yet. Use 💼 on a match to mark it!');
+    await ctx.reply('No applied jobs tracked yet. Tap 💼 on a card when you submit an application!');
     return;
   }
 
   await ctx.reply(
-    `💼 *You\'ve applied to ${profile.appliedIds.length} job(s).*\n\nKeep going — consistency is key! 🚀`,
+    `💼 *Application Tracker*
+
+You have applied to *${profile.appliedIds.length}* role(s).
+All applied roles are automatically excluded from your new recommendations. Good luck! 🚀`,
     { parse_mode: 'Markdown' }
   );
 });
 
-// ── Onboarding callbacks ───────────────────────────────────────────────────────
+bot.command('help', async (ctx) => {
+  await ctx.reply(
+    `🤖 *Barcelona & European Internship Discovery Bot*
 
-bot.callbackQuery(/^onboard:disc:(.+)$/, async (ctx) => {
-  const user = ctx.from;
-  const disc = ctx.match[1] as DisciplineKey;
+*Commands:*
+/start — Launch the Alignment Onboarding Wizard
+/align — Diagnostic check-in & recalibrate your search
+/matches — View your top personalized matches
+/find \`<role> in <city>\` — Search by custom position & location
+/profile — View your profile & statistics
+/saved — List saved/bookmarked jobs
+/applied — Application status tracker
+/help — Command directory
+
+💬 *Free Text:* You can also type natural language questions (e.g. *"What are top design agencies in Milan?"*) and the AI Agent will assist you!`,
+    { parse_mode: 'Markdown' }
+  );
+});
+
+// ── Alignment Onboarding Callback Handlers ─────────────────────────────────────
+
+// Step 1 -> Step 2: City -> Track
+bot.callbackQuery(/^align:city:(.+)$/, async (ctx) => {
+  const cityKey = ctx.match[1] as CityKey;
+  const cityName = CITIES[cityKey]?.city || 'Milan';
   await ctx.answerCallbackQuery();
 
-  const keyboard = new InlineKeyboard()
-    .text('🇪🇺 Erasmus+ Traineeship', `onboard:contract:${disc}:erasmus`)
-    .row()
-    .text('🇪🇸 Convenio de Prácticas', `onboard:contract:${disc}:convenio`)
-    .row()
-    .text('🔓 Any Contract Type', `onboard:contract:${disc}:any`);
+  const keyboard = new InlineKeyboard();
+  const discKeys = Object.keys(DISCIPLINES) as DisciplineKey[];
+  discKeys.forEach((key, i) => {
+    const d = DISCIPLINES[key];
+    keyboard.text(`${d.emoji} ${d.label}`, `align:track:${cityKey}:${key}`);
+    if (i % 2 === 1) keyboard.row();
+  });
 
   await ctx.editMessageText(
-    `${DISCIPLINES[disc].emoji} *${DISCIPLINES[disc].label}* — great choice!\n\n🎓 *What type of internship contract do you need?*`,
+    `📍 *Location:* ${CITIES[cityKey]?.emoji || '📍'} *${cityName}* — selected!
+
+---
+🎯 *Step 2/3: What is your primary discipline or role track?*`,
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
 });
 
-bot.callbackQuery(/^onboard:contract:(.+):(.+)$/, async (ctx) => {
-  const user = ctx.from;
-  const disc = ctx.match[1] as DisciplineKey;
-  const contract = ctx.match[2] as ContractKey;
+// Step 2 -> Step 3: Track -> Contract
+bot.callbackQuery(/^align:track:(.+):(.+)$/, async (ctx) => {
+  const cityKey = ctx.match[1] as CityKey;
+  const disc = ctx.match[2] as DisciplineKey;
   await ctx.answerCallbackQuery();
 
   const keyboard = new InlineKeyboard()
-    .text('📌 Barcelona Only', `onboard:loc:${disc}:${contract}:barcelona`)
+    .text('🇪🇺 Erasmus+ Traineeship', `align:done:${cityKey}:${disc}:erasmus`)
     .row()
-    .text('🇪🇸 Anywhere in Spain', `onboard:loc:${disc}:${contract}:spain`)
+    .text('🇮🇹 Stage Curriculare (IT)', `align:done:${cityKey}:${disc}:stage_curriculare`)
     .row()
-    .text('🌍 All of Europe', `onboard:loc:${disc}:${contract}:europe`);
+    .text('🇪🇸 Convenio de Prácticas (ES)', `align:done:${cityKey}:${disc}:convenio`)
+    .row()
+    .text('🔓 Any Contract / Direct Placement', `align:done:${cityKey}:${disc}:any`);
 
   await ctx.editMessageText(
-    `${CONTRACTS[contract].emoji} *${CONTRACTS[contract].label}* — noted!\n\n📍 *Where are you looking?*`,
+    `${DISCIPLINES[disc]?.emoji || '🎨'} *${DISCIPLINES[disc]?.label || disc}* — noted!
+
+---
+🎓 *Step 3/3: What is your university or legal contract framework?*`,
     { parse_mode: 'Markdown', reply_markup: keyboard }
   );
 });
 
-bot.callbackQuery(/^onboard:loc:(.+):(.+):(.+)$/, async (ctx) => {
+// Step 3 -> Completion
+bot.callbackQuery(/^align:done:(.+):(.+):(.+)$/, async (ctx) => {
   const user = ctx.from;
-  const disc = ctx.match[1] as DisciplineKey;
-  const contract = ctx.match[2] as ContractKey;
-  const loc = ctx.match[3] as LocationKey;
+  const cityKey = ctx.match[1] as CityKey;
+  const disc = ctx.match[2] as DisciplineKey;
+  const contract = ctx.match[3] as ContractKey;
+  const cityName = CITIES[cityKey]?.city || 'Milan';
+
   await ctx.answerCallbackQuery();
 
-  // Save profile
+  // Save / Update profile
   const profile = createProfile(
     user.id,
-    user.username ?? '',
+    user.username || '',
     user.first_name,
     disc,
     [contract],
-    loc,
+    [cityName],
+    [],
+    [],
+    '',
+    '',
+    'English',
+    'any'
   );
   saveProfile(profile);
 
   const d = DISCIPLINES[disc];
   const c = CONTRACTS[contract];
-  const l = LOCATIONS[loc];
 
   await ctx.editMessageText(
-    `✅ *Profile Created!*\n\n` +
-    `👤 *Name:* ${user.first_name}\n` +
-    `${d.emoji} *Discipline:* ${d.label}\n` +
-    `${c.emoji} *Contract:* ${c.label}\n` +
-    `${l.emoji} *Location:* ${l.label}\n\n` +
-    `Ready to find your internship? 🚀`,
+    `✅ *Search Alignment Completed Successfully!*
+
+📊 *Active Candidate Profile:*
+• *Target Location:* ${CITIES[cityKey]?.emoji || '📍'} ${cityName}
+• *Target Track:* ${d?.emoji || '🎯'} ${d?.label}
+• *Contract Framework:* ${c?.emoji || '🎓'} ${c?.label}
+• *Language:* English-first international environment
+
+Ready to discover your matches? 🚀`,
     {
       parse_mode: 'Markdown',
       reply_markup: new InlineKeyboard()
-        .text('🎯 Find My Matches Now!', 'cmd:matches')
+        .text('🔥 Discover Top Matches Now', 'cmd:matches')
         .row()
-        .text('✏️ Edit Profile', 'cmd:profile'),
+        .text('⚖️ Recalibrate / Align', 'cmd:align'),
     }
   );
 });
 
-// ── Button callbacks (save / skip / applied / menu) ───────────────────────────
+// Alignment Sub-Menus (Recalibrate)
+bot.callbackQuery('align:re_city', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const keyboard = new InlineKeyboard()
+    .text('🇮🇹 Milan', 'set:city:Milan').text('🇪🇸 Barcelona', 'set:city:Barcelona').row()
+    .text('🇬🇧 London', 'set:city:London').text('🇩🇪 Berlin', 'set:city:Berlin').row()
+    .text('🇳🇱 Amsterdam', 'set:city:Amsterdam').text('🇫🇷 Paris', 'set:city:Paris').row()
+    .text('🏠 100% Remote', 'set:city:Remote').text('🌍 All Europe', 'set:city:Europe');
+
+  await ctx.reply('📍 *Select your new primary target city:*', { parse_mode: 'Markdown', reply_markup: keyboard });
+});
+
+bot.callbackQuery(/^set:city:(.+)$/, async (ctx) => {
+  const city = ctx.match[1];
+  const profile = getProfile(ctx.from.id);
+  if (profile) {
+    profile.targetCities = [city];
+    saveProfile(profile);
+  }
+  await ctx.answerCallbackQuery({ text: `📍 Location updated to ${city}!` });
+  await ctx.reply(`✅ Target location updated to *${city}*. Tap /matches to view updated opportunities!`, {
+    parse_mode: 'Markdown',
+    reply_markup: new InlineKeyboard().text('🔥 Find Matches', 'cmd:matches'),
+  });
+});
+
+bot.callbackQuery('align:re_track', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const keyboard = new InlineKeyboard();
+  (Object.keys(DISCIPLINES) as DisciplineKey[]).forEach((key, i) => {
+    const d = DISCIPLINES[key];
+    keyboard.text(`${d.emoji} ${d.label}`, `set:track:${key}`);
+    if (i % 2 === 1) keyboard.row();
+  });
+  await ctx.reply('🎯 *Select your new target track:*', { parse_mode: 'Markdown', reply_markup: keyboard });
+});
+
+bot.callbackQuery(/^set:track:(.+)$/, async (ctx) => {
+  const disc = ctx.match[1] as DisciplineKey;
+  const profile = getProfile(ctx.from.id);
+  if (profile) {
+    profile.discipline = disc;
+    saveProfile(profile);
+  }
+  await ctx.answerCallbackQuery({ text: `🎯 Track updated to ${DISCIPLINES[disc]?.label}!` });
+  await ctx.reply(`✅ Discipline updated to *${DISCIPLINES[disc]?.label}*. Tap /matches to view refreshed recommendations!`, {
+    parse_mode: 'Markdown',
+    reply_markup: new InlineKeyboard().text('🔥 Find Matches', 'cmd:matches'),
+  });
+});
+
+bot.callbackQuery('align:re_contract', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const keyboard = new InlineKeyboard()
+    .text('🇪🇺 Erasmus+ Traineeship', 'set:contract:erasmus').row()
+    .text('🇮🇹 Stage Curriculare', 'set:contract:stage_curriculare').row()
+    .text('🇪🇸 Convenio de Prácticas', 'set:contract:convenio').row()
+    .text('🔓 Any / Placement', 'set:contract:any');
+
+  await ctx.reply('🎓 *Select your contract requirement:*', { parse_mode: 'Markdown', reply_markup: keyboard });
+});
+
+bot.callbackQuery(/^set:contract:(.+)$/, async (ctx) => {
+  const contract = ctx.match[1] as ContractKey;
+  const profile = getProfile(ctx.from.id);
+  if (profile) {
+    profile.contractTypes = [contract];
+    saveProfile(profile);
+  }
+  await ctx.answerCallbackQuery({ text: `🎓 Contract updated!` });
+  await ctx.reply(`✅ Contract preference updated. Tap /matches to see updated listings!`, {
+    parse_mode: 'Markdown',
+    reply_markup: new InlineKeyboard().text('🔥 Find Matches', 'cmd:matches'),
+  });
+});
+
+// ── General Button Actions (Save, Skip, Applied, Matches) ───────────────────────
 
 bot.callbackQuery(/^save:(.+)$/, async (ctx) => {
   markSaved(ctx.from.id, ctx.match[1]);
-  await ctx.answerCallbackQuery({ text: '👍 Saved!' });
+  await ctx.answerCallbackQuery({ text: '👍 Saved to bookmarks!' });
 });
 
 bot.callbackQuery(/^skip:(.+)$/, async (ctx) => {
   markDismissed(ctx.from.id, ctx.match[1]);
-  await ctx.answerCallbackQuery({ text: '👎 Skipped' });
+  await ctx.answerCallbackQuery({ text: '👎 Dismissed from future feeds' });
 });
 
 bot.callbackQuery(/^applied:(.+)$/, async (ctx) => {
@@ -378,10 +587,16 @@ bot.callbackQuery(/^applied:(.+)$/, async (ctx) => {
 bot.callbackQuery('cmd:matches', async (ctx) => {
   await ctx.answerCallbackQuery();
   const profile = getProfile(ctx.from.id);
-  if (!profile) { await ctx.reply('Run /start first!'); return; }
+  if (!profile) {
+    await ctx.reply('Run /start to align your profile first!');
+    return;
+  }
   const matches = getTopMatches(profile, 3);
   for (const job of matches) {
-    await ctx.reply(jobCard(job), { parse_mode: 'Markdown', reply_markup: jobKeyboard(job) });
+    await ctx.reply(formatJobCard(job), {
+      parse_mode: 'Markdown',
+      reply_markup: buildJobKeyboard(job),
+    });
   }
 });
 
@@ -389,110 +604,125 @@ bot.callbackQuery('cmd:more', async (ctx) => {
   await ctx.answerCallbackQuery();
   const profile = getProfile(ctx.from.id);
   if (!profile) return;
-  const matches = getTopMatches(profile, 5, 5);
+  const matches = getTopMatches(profile, 4, 3);
   for (const job of matches) {
-    await ctx.reply(jobCard(job), { parse_mode: 'Markdown', reply_markup: jobKeyboard(job) });
+    await ctx.reply(formatJobCard(job), {
+      parse_mode: 'Markdown',
+      reply_markup: buildJobKeyboard(job),
+    });
   }
+});
+
+bot.callbackQuery('cmd:align', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const profile = getProfile(ctx.from.id);
+  if (!profile) {
+    await ctx.reply('Run /start to begin onboarding!');
+    return;
+  }
+  const disc = DISCIPLINES[profile.discipline];
+  const citiesStr = profile.targetCities?.join(', ') || 'Milan, Barcelona';
+
+  const alignKeyboard = new InlineKeyboard()
+    .text('📍 Change Cities', 'align:re_city')
+    .text('🎯 Change Track', 'align:re_track')
+    .row()
+    .text('🎓 Change Contract', 'align:re_contract')
+    .row()
+    .text('🔥 Re-Run Matches Now', 'cmd:matches');
+
+  await ctx.reply(
+    `⚖️ *Search Alignment Diagnostic*
+
+• *Track:* ${disc?.emoji || '🎯'} ${disc?.label || profile.discipline}
+• *Target Cities:* 📍 ${citiesStr}
+• *Contract:* 🎓 ${profile.contractTypes.map(c => CONTRACTS[c]?.label || c).join(', ')}
+
+💡 *Select an item to recalibrate:*`,
+    { parse_mode: 'Markdown', reply_markup: alignKeyboard }
+  );
 });
 
 bot.callbackQuery('cmd:profile', async (ctx) => {
   await ctx.answerCallbackQuery();
-  ctx.message = ctx.callbackQuery.message as any;
   const profile = getProfile(ctx.from.id);
   if (!profile) { await ctx.reply('Run /start first!'); return; }
   const disc = DISCIPLINES[profile.discipline];
-  const loc = LOCATIONS[profile.targetLocation];
+  const citiesStr = profile.targetCities?.join(', ') || 'Milan, Barcelona';
+
   await ctx.reply(
-    `*Your Profile:*\n${disc.emoji} ${disc.label}\n📍 ${loc.label}\n🎓 ${profile.contractTypes.map(c => CONTRACTS[c].label).join(', ')}\n🛠️ ${profile.skills.join(', ') || 'No skills set'}`,
+    `👤 *Your Search Profile:*
+
+🎯 *Discipline:* ${disc?.emoji || '🎨'} ${disc?.label || profile.discipline}
+📍 *Cities:* ${citiesStr}
+🎓 *Contract:* ${profile.contractTypes.map(c => CONTRACTS[c]?.label || c).join(', ')}
+
+📊 *Activity:*
+• *Saved:* ${profile.savedIds.length}
+• *Applied:* ${profile.appliedIds.length}
+• *Dismissed:* ${profile.dismissedIds.length}`,
     {
       parse_mode: 'Markdown',
       reply_markup: new InlineKeyboard()
-        .text('🎯 Re-run Onboarding', 'cmd:reonboard')
-        .text('🎯 Find Matches', 'cmd:matches'),
+        .text('⚖️ Recalibrate / Align', 'cmd:align')
+        .text('🔥 Find Matches', 'cmd:matches'),
     }
   );
 });
 
-bot.callbackQuery('cmd:reonboard', async (ctx) => {
+bot.callbackQuery('cmd:saved', async (ctx) => {
   await ctx.answerCallbackQuery();
-  const keyboard = new InlineKeyboard();
-  const discKeys = Object.keys(DISCIPLINES) as DisciplineKey[];
-  discKeys.forEach((key, i) => {
-    const d = DISCIPLINES[key];
-    keyboard.text(`${d.emoji} ${d.label}`, `onboard:disc:${key}`);
-    if (i % 2 === 1) keyboard.row();
-  });
-  await ctx.reply('👇 Choose your discipline:', { reply_markup: keyboard });
-});
-
-// Edit profile callbacks
-bot.callbackQuery('edit:discipline', async (ctx) => {
-  await ctx.answerCallbackQuery();
-  const keyboard = new InlineKeyboard();
-  (Object.keys(DISCIPLINES) as DisciplineKey[]).forEach((key, i) => {
-    const d = DISCIPLINES[key];
-    keyboard.text(`${d.emoji} ${d.label}`, `set:disc:${key}`);
-    if (i % 2 === 1) keyboard.row();
-  });
-  await ctx.reply('Choose new discipline:', { reply_markup: keyboard });
-});
-
-bot.callbackQuery(/^set:disc:(.+)$/, async (ctx) => {
-  const disc = ctx.match[1] as DisciplineKey;
   const profile = getProfile(ctx.from.id);
-  if (profile) { profile.discipline = disc; saveProfile(profile); }
-  await ctx.answerCallbackQuery({ text: `Discipline updated to ${DISCIPLINES[disc].label}!` });
+  if (!profile || profile.savedIds.length === 0) {
+    await ctx.reply('No saved jobs yet. Tap 👍 on any card to save it!');
+    return;
+  }
+  const jobs = searchJobs('', profile, 100);
+  const saved = jobs.filter(j => profile.savedIds.includes(j.id)).slice(0, 3);
+  for (const job of saved) {
+    await ctx.reply(formatJobCard(job), {
+      parse_mode: 'Markdown',
+      reply_markup: buildJobKeyboard(job),
+    });
+  }
 });
 
-bot.callbackQuery('edit:location', async (ctx) => {
+bot.callbackQuery('cmd:applied', async (ctx) => {
   await ctx.answerCallbackQuery();
-  const keyboard = new InlineKeyboard()
-    .text('📌 Barcelona Only', 'set:loc:barcelona').row()
-    .text('🇪🇸 Anywhere in Spain', 'set:loc:spain').row()
-    .text('🌍 All of Europe', 'set:loc:europe');
-  await ctx.reply('Choose new location preference:', { reply_markup: keyboard });
-});
-
-bot.callbackQuery(/^set:loc:(.+)$/, async (ctx) => {
-  const loc = ctx.match[1] as LocationKey;
   const profile = getProfile(ctx.from.id);
-  if (profile) { profile.targetLocation = loc; saveProfile(profile); }
-  await ctx.answerCallbackQuery({ text: `Location updated to ${LOCATIONS[loc].label}!` });
+  if (!profile || profile.appliedIds.length === 0) {
+    await ctx.reply('No applied jobs tracked yet. Tap 💼 on a card when you submit an application!');
+    return;
+  }
+  await ctx.reply(`💼 You have applied to *${profile.appliedIds.length}* job(s)!`, { parse_mode: 'Markdown' });
 });
 
-bot.callbackQuery('edit:contract', async (ctx) => {
+bot.callbackQuery('cmd:search_hint', async (ctx) => {
   await ctx.answerCallbackQuery();
-  const keyboard = new InlineKeyboard()
-    .text('🇪🇺 Erasmus+ Traineeship', 'set:contract:erasmus').row()
-    .text('🇪🇸 Convenio de Prácticas', 'set:contract:convenio').row()
-    .text('🔓 Any Contract', 'set:contract:any');
-  await ctx.reply('Choose contract preference:', { reply_markup: keyboard });
+  await ctx.reply(
+    `🔍 *How to search:*
+Type: \`/find <role> in <city>\`
+
+*Examples:*
+• \`/find growth marketing in milan\`
+• \`/find product designer in barcelona\`
+• \`/find software intern remote\``,
+    { parse_mode: 'Markdown' }
+  );
 });
 
-bot.callbackQuery(/^set:contract:(.+)$/, async (ctx) => {
-  const contract = ctx.match[1] as ContractKey;
-  const profile = getProfile(ctx.from.id);
-  if (profile) { profile.contractTypes = [contract]; saveProfile(profile); }
-  await ctx.answerCallbackQuery({ text: `Contract updated!` });
-});
-
-bot.callbackQuery('edit:skills', async (ctx) => {
-  await ctx.answerCallbackQuery();
-  await ctx.reply('Type your skills separated by commas:\nExample: Figma, Python, Excel, Design Systems');
-});
-
-// ── Free-text → AGY bridge ────────────────────────────────────────────────────
+// ── Free-Text Natural Language -> Paseo AGY Bridge ─────────────────────────────
 
 bot.on('message:text', async (ctx) => {
   const text = ctx.message.text;
-  if (text.startsWith('/')) return; // handled by commands
+  if (text.startsWith('/')) return;
 
   const convId = loadConvId();
   const convFlag = convId ? `--conversation ${convId}` : '--continue';
   const safePrompt = text.replace(/'/g, "'\\''");
   const cmd = `${AGY_BIN} --print '${safePrompt}' ${convFlag} --dangerously-skip-permissions`;
 
-  await ctx.reply('⚡ Thinking...');
+  await ctx.reply('⚡ *Analyzing query and searching opportunities...*', { parse_mode: 'Markdown' });
 
   try {
     const { stdout } = await execAsync(cmd, {
@@ -509,26 +739,27 @@ bot.on('message:text', async (ctx) => {
   }
 });
 
-// ── Register commands with BotFather ─────────────────────────────────────────
+// ── Register Commands with BotFather ──────────────────────────────────────────
 
 bot.api.setMyCommands([
-  { command: 'start', description: 'Set up or view your profile' },
-  { command: 'matches', description: 'Get your personalised job matches' },
-  { command: 'find', description: 'Search jobs by keyword' },
-  { command: 'profile', description: 'View & edit your job-search profile' },
-  { command: 'saved', description: 'Jobs you liked' },
-  { command: 'applied', description: 'Jobs you marked as applied' },
-  { command: 'help', description: 'Show all commands' },
+  { command: 'start', description: 'Interactive Search Alignment Onboarding' },
+  { command: 'align', description: 'Recalibrate / align search parameters' },
+  { command: 'matches', description: 'Get top personalized internship matches' },
+  { command: 'find', description: 'Search by keyword (e.g. /find marketing in milan)' },
+  { command: 'profile', description: 'View your profile and alignment' },
+  { command: 'saved', description: 'List saved / bookmarked roles' },
+  { command: 'applied', description: 'Application tracker' },
+  { command: 'help', description: 'Command directory' },
 ]);
 
-// ── Start ─────────────────────────────────────────────────────────────────────
+// ── Start Listener ────────────────────────────────────────────────────────────
 
 bot.start({
   onStart: (info) => {
-    console.log(`\n🤖 @${info.username} is LIVE`);
+    console.log(`\n🤖 @${info.username} is LIVE with Deep Alignment Onboarding!`);
     console.log(`📁 Workspace: ${WORKSPACE}`);
-    console.log(`🧠 Bridge conv: ${loadConvId() ?? 'none (set up bridge first)'}`);
-    console.log(`👥 Allowed IDs: ${ALLOWED_IDS.join(', ') || 'all'}`);
-    console.log(`\n✅ Commands: /start /matches /find /profile /saved /applied /help\n`);
+    console.log(`🧠 Bridge conversation: ${loadConvId() ?? 'none'}`);
+    console.log(`👥 Allowed Telegram IDs: ${ALLOWED_IDS.join(', ') || 'all'}`);
+    console.log(`✅ Commands: /start /align /matches /find /profile /saved /applied /help\n`);
   },
 });
