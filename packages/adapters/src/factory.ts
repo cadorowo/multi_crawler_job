@@ -6,7 +6,7 @@ import { AshbyAdapter } from './adapters/ashby.js';
 import { TeamtailorAdapter } from './adapters/teamtailor.js';
 import { FactorialAdapter } from './adapters/factorial.js';
 import { WorkableAdapter } from './adapters/workable.js';
-import { JobSpyAdapter } from './adapters/jobspy.js';
+import { AtsScrapersAdapter } from './adapters/ats-scrapers.js';
 
 export class AdapterFactory {
   private static instance: AdapterFactory;
@@ -30,7 +30,7 @@ export class AdapterFactory {
     this.register(new TeamtailorAdapter());
     this.register(new FactorialAdapter());
     this.register(new WorkableAdapter());
-    this.register(new JobSpyAdapter());
+    this.register(new AtsScrapersAdapter());
   }
 
   /**

@@ -5,9 +5,13 @@ import { resolve } from 'node:path';
 dotenv.config({ path: resolve(process.cwd(), '.env') });
 dotenv.config();
 
-const token = process.env.TELEGRAM_BOT_TOKEN || '8565693353:AAFw7xw2RuweoMVb047-gIjxxCrcDA_5w_s';
+const token = process.env.TELEGRAM_BOT_TOKEN;
 
-const bot = new Bot(token);
+const bot = new Bot(token || 'dummy-token-for-initialization');
+
+if (!token) {
+  throw new Error('TELEGRAM_BOT_TOKEN is required to run the live Telegram test.');
+}
 
 console.log('═══════════════════════════════════════════════════════════════════════════════');
 console.log(' 🚀 TELEGRAM BOT LIVE TEST LISTENER');

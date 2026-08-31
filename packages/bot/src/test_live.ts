@@ -6,9 +6,13 @@ import pdfParse from 'pdf-parse';
 dotenv.config({ path: resolve(process.cwd(), '../../.env') });
 dotenv.config();
 
-const token = process.env.TELEGRAM_BOT_TOKEN || '8565693353:AAFw7xw2RuweoMVb047-gIjxxCrcDA_5w_s';
+const token = process.env.TELEGRAM_BOT_TOKEN;
 
-const bot = new Bot(token);
+const bot = new Bot(token || 'dummy-token-for-initialization');
+
+if (!token) {
+  throw new Error('TELEGRAM_BOT_TOKEN is required to run the live Telegram test.');
+}
 
 console.log('═══════════════════════════════════════════════════════════════════════════════');
 console.log(' 🚀 TELEGRAM BOT LIVE LISTENER & CV PARSER');
@@ -72,8 +76,9 @@ Direct alignment with your Politecnico di Torino UX/UI design & visual prototypi
 
 // 2. Document & PDF CV Upload Handler
 bot.on(':document', async (ctx) => {
-  const doc = ctx.message.document;
+  const doc = ctx.message?.document;
   const user = ctx.from;
+  if (!doc || !user) return;
   const fileName = doc.file_name || 'document.pdf';
 
   console.log(`\n📄 [Document Received] From: ${user.first_name} (ID: ${user.id}) | File: "${fileName}" | Size: ${doc.file_size} bytes`);

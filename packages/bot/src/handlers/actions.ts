@@ -48,8 +48,8 @@ export async function handleActionCallback(ctx: Context): Promise<void> {
       const { text, keyboard } = createDeepBreakdownCard({
         jobId: job.id,
         title: job.title,
-        companyName: job.company?.name || 'Barcelona Tech',
-        location: job.normalizedLocation || 'Barcelona, Spain',
+        companyName: job.company?.name || 'Unknown company',
+        location: job.normalizedLocation || 'Unknown location',
         score: Math.round((interaction?.matchScore ?? 0.75) * 100),
         domainFit: job.department || 'Tech & Design',
         isUniversity: true,
@@ -62,7 +62,7 @@ export async function handleActionCallback(ctx: Context): Promise<void> {
           analysis?.recommendationExplanation ||
           job.summary ||
           'Great role aligning with your skillset and target profile.',
-        companyDistrict: job.company?.location || 'Barcelona',
+        companyDistrict: job.company?.location || 'Unknown location',
         companyTier: job.company?.tier || 1,
         salaryRaw: job.salary?.raw,
         applyUrl: job.url,
@@ -81,8 +81,8 @@ export async function handleActionCallback(ctx: Context): Promise<void> {
       const { text, keyboard } = createAlertCard({
         jobId: job.id,
         title: job.title,
-        companyName: job.company?.name || 'Barcelona Tech',
-        location: job.normalizedLocation || 'Barcelona, Spain',
+        companyName: job.company?.name || 'Unknown company',
+        location: job.normalizedLocation || 'Unknown location',
         workplaceType: job.workplaceType || 'hybrid',
         score: Math.round((interaction?.matchScore ?? 0.75) * 100),
         domainFit: job.department || 'Tech & Design',
@@ -134,8 +134,8 @@ export async function handleActionCallback(ctx: Context): Promise<void> {
       const { text, keyboard } = createAlertCard({
         jobId: job.id,
         title: job.title,
-        companyName: job.company?.name || 'Barcelona Tech',
-        location: job.normalizedLocation || 'Barcelona, Spain',
+        companyName: job.company?.name || 'Unknown company',
+        location: job.normalizedLocation || 'Unknown location',
         workplaceType: job.workplaceType || 'hybrid',
         score: Math.round((interaction?.matchScore ?? 0.75) * 100),
         domainFit: job.department || 'Tech & Design',

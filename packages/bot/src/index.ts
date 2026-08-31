@@ -1,10 +1,10 @@
-import { bot } from './bot.js';
+import { bot, JOBFINDER_COMMANDS } from './bot.js';
 
 export * from './bot.js';
 export * from './cards.js';
 
 async function main() {
-  console.log('🤖 Starting Barcelona Internship Discovery Telegram Bot...');
+  console.log('🤖 Starting JobFinder Telegram Bot...');
 
   if (!process.env.TELEGRAM_BOT_TOKEN) {
     console.error('❌ TELEGRAM_BOT_TOKEN is missing. Please set it in your .env file.');
@@ -22,8 +22,9 @@ async function main() {
   process.on('SIGTERM', () => handleShutdown('SIGTERM'));
 
   await bot.start({
-    onStart: (botInfo) => {
-      console.log(`✅ Bot @${botInfo.username} is running and listening for updates.`);
+    onStart: async (botInfo) => {
+      await bot.api.setMyCommands(JOBFINDER_COMMANDS);
+      console.log(`✅ JobFinder @${botInfo.username} is running and listening for updates.`);
     },
   });
 }

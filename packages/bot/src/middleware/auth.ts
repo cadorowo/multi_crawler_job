@@ -14,7 +14,7 @@ const allowedTelegramIds = new Set<string>(
 );
 
 // Optional invite secret token from env
-const inviteSecret = process.env.INVITE_SECRET || 'bcn-intern-2026';
+const inviteSecret = process.env.INVITE_SECRET;
 
 export async function authMiddleware(ctx: Context, next: NextFunction): Promise<void> {
   const telegramId = ctx.from?.id ? String(ctx.from.id) : null;
@@ -29,7 +29,7 @@ export async function authMiddleware(ctx: Context, next: NextFunction): Promise<
 
   // Check if message is an invite token command: /invite <token>
   const text = ctx.message?.text?.trim() || '';
-  if (text.startsWith('/invite')) {
+  if (inviteSecret && text.startsWith('/invite')) {
     const parts = text.split(/\s+/);
     const token = parts[1];
 
@@ -48,7 +48,7 @@ export async function authMiddleware(ctx: Context, next: NextFunction): Promise<
 
   // User is not authorized
   await ctx.reply(
-    `🔒 *Access Restricted*\n\nThis Barcelona Internship Discovery Bot is currently private.\nYour Telegram ID: \`${telegramId}\`\n\nIf you have an invite code, type:\n\`/invite <secret_code>\``,
+    `🔒 *Access Restricted*\n\nJobFinder is currently private.\nYour Telegram ID: \`${telegramId}\`\n\nIf you have an invite code, type:\n\`/invite <secret_code>\``,
     { parse_mode: 'Markdown' }
   );
 }

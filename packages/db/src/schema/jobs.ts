@@ -15,6 +15,19 @@ export const jobSalarySchema = z.object({
 
 export type JobSalary = z.infer<typeof jobSalarySchema>;
 
+export const jobClassificationSchema = z.object({
+  isUniversityInternship: z.boolean().optional(),
+  acceptsErasmusTraineeship: z.boolean().optional(),
+  workingLanguage: z.string().optional(),
+  domainFit: z.string().optional(),
+  requiredTools: z.array(z.string()).default([]),
+  keyTasks: z.array(z.string()).default([]),
+  fitReasoning: z.string().optional(),
+  calculatedFitScore: z.number().min(0).max(100).optional(),
+});
+
+export type JobClassification = z.infer<typeof jobClassificationSchema>;
+
 export const jobs = pgTable('jobs', {
   id: uuid('id').defaultRandom().primaryKey(),
   companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
@@ -38,6 +51,10 @@ export const jobs = pgTable('jobs', {
   skills: jsonb('skills').$type<string[]>().notNull().default([]),
   languages: jsonb('languages').$type<string[]>().notNull().default([]),
   salary: jsonb('salary').$type<JobSalary>().notNull().default({}),
+  classification: jsonb('classification')
+    .$type<JobClassification>()
+    .notNull()
+    .default({ requiredTools: [], keyTasks: [] }),
   rawPayload: jsonb('raw_payload').$type<Record<string, unknown>>().notNull().default({}),
   embedding: vector('embedding', { dimensions: 1536 }),
   status: jobStatusEnum('status').notNull().default('active'),

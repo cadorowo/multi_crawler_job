@@ -29,7 +29,6 @@ export async function runMatchAndNotify(): Promise<{
     const unnotifiedJobs = await db.query.jobs.findMany({
       where: and(
         eq(jobs.status, 'active'),
-        eq(jobs.isBarcelona, true),
         // Filter out jobs where user already has an interaction with status in ('notified', 'viewed', 'saved', 'applied', 'dismissed')
         sql`NOT EXISTS (
           SELECT 1 FROM ${userJobInteractions}
@@ -50,15 +49,16 @@ export async function runMatchAndNotify(): Promise<{
     );
 
     for (const job of unnotifiedJobs) {
+      const classification = job.classification;
       const extraction: JobExtractionResult = {
-        is_university_internship: true,
-        accepts_erasmus_traineeship: true,
+        is_university_internship: classification.isUniversityInternship ?? false,
+        accepts_erasmus_traineeship: classification.acceptsErasmusTraineeship ?? false,
         working_language: (job.languages?.[0]?.toLowerCase() as any) || 'english',
-        domain_fit: (job.department?.toLowerCase() as any) || 'ux_ui_design',
-        required_tools: job.skills || [],
-        key_tasks_summary: job.requirements || [],
-        fit_reasoning: job.summary || 'Exciting internship position matching your tech stack.',
-        calculated_fit_score: 80,
+        domain_fit: (classification.domainFit as any) || inferDomainFit(job.title, job.department),
+        required_tools: classification.requiredTools.length ? classification.requiredTools : job.skills || [],
+        key_tasks_summary: classification.keyTasks.length ? classification.keyTasks : job.requirements || [],
+        fit_reasoning: classification.fitReasoning || job.summary || 'Internship opportunity indexed by JobFinder.',
+        calculated_fit_score: classification.calculatedFitScore ?? 50,
       };
 
       const jobEmbedding = job.embedding ? (job.embedding as number[]) : undefined;
@@ -67,11 +67,10 @@ export async function runMatchAndNotify(): Promise<{
         job: {
           id: job.id,
           title: job.title,
-          companyName: job.company?.name || 'Barcelona Tech',
+          companyName: job.company?.name || 'Unknown company',
           companyTier: job.company?.tier || 2,
           url: job.url,
-          locationRaw: job.normalizedLocation || job.locationRaw || 'Barcelona, Spain',
-          isBarcelona: job.isBarcelona,
+          locationRaw: job.normalizedLocation || job.locationRaw || 'Unknown location',
           workplaceType: job.workplaceType || 'hybrid',
           descriptionText: job.descriptionText,
         },
@@ -80,14 +79,20 @@ export async function runMatchAndNotify(): Promise<{
           targetRoles: candidateProfile.targetRoles,
           skills: candidateProfile.skills,
           tools: candidateProfile.skills,
-          requiresConvenio: user.preferences?.hardFilters?.mustBeInBarcelona,
+          preferredLocations: candidateProfile.preferredLocations,
+          remotePreference: candidateProfile.remotePreference,
+          contractTypes: candidateProfile.contractTypes,
+          requiresConvenio: candidateProfile.contractTypes?.some((contract) =>
+            contract.toLowerCase().includes('convenio')
+          ),
           englishOnly: false,
         },
         candidateEmbedding,
         jobEmbedding,
       });
 
-      if (matchResult.shouldNotify) {
+      const threshold = user.preferences?.minScoreThreshold ?? 0.65;
+      if (matchResult.shouldNotify && matchResult.overallScore / 100 >= threshold) {
         logger.info(
           { job: job.title, company: job.company?.name, score: matchResult.overallScore },
           'Match score exceeds notification threshold! Sending Telegram Alert Card...'
@@ -97,8 +102,8 @@ export async function runMatchAndNotify(): Promise<{
           const { text, keyboard } = createAlertCard({
             jobId: job.id,
             title: job.title,
-            companyName: job.company?.name || 'Barcelona Tech',
-            location: job.normalizedLocation || 'Barcelona, Spain',
+            companyName: job.company?.name || 'Unknown company',
+            location: job.normalizedLocation || 'Unknown location',
             workplaceType: job.workplaceType || 'hybrid',
             score: matchResult.overallScore,
             domainFit: matchResult.domainFit,
@@ -159,4 +164,15 @@ export async function runMatchAndNotify(): Promise<{
     usersEvaluated: activeUsers.length,
     notificationsSent,
   };
+}
+
+function inferDomainFit(title: string, department?: string | null): JobExtractionResult['domain_fit'] {
+  const text = `${title} ${department || ''}`.toLowerCase();
+  if (/ux|ui|product design|graphic|visual/.test(text)) return 'ux_ui_design';
+  if (/data|machine learning|\bai\b|analytics/.test(text)) return 'data_ai';
+  if (/engineer|developer|software|frontend|backend/.test(text)) return 'engineering';
+  if (/marketing|growth|content|brand/.test(text)) return 'marketing';
+  if (/finance|accounting|investment/.test(text)) return 'finance';
+  if (/operations|human resources|recruit/.test(text)) return 'operations';
+  return 'business';
 }

@@ -12,7 +12,6 @@ export interface MatcherInput {
     companyTier?: number;
     url: string;
     locationRaw?: string;
-    isBarcelona: boolean;
     workplaceType?: string;
     descriptionText: string;
   };
@@ -21,6 +20,9 @@ export interface MatcherInput {
     targetRoles: string[];
     skills: string[];
     tools: string[];
+    preferredLocations?: string[];
+    remotePreference?: 'remote' | 'hybrid' | 'onsite' | 'any';
+    contractTypes?: string[];
     requiresConvenio?: boolean;
     englishOnly?: boolean;
   };
@@ -71,6 +73,12 @@ export class MatcherService {
         preferenceBoost += 8;
         break;
       case 'other_tech':
+      case 'engineering':
+      case 'data_ai':
+      case 'marketing':
+      case 'finance':
+      case 'operations':
+      case 'business':
         preferenceBoost += 5;
         break;
       case 'unrelated':
@@ -120,15 +128,24 @@ export class MatcherService {
     let isHardFilterPassed = true;
     let disqualificationReason: string | undefined;
 
-    if (!job.isBarcelona) {
+    if (!this.locationMatches(job.locationRaw, job.workplaceType, candidate.preferredLocations, candidate.remotePreference)) {
       isHardFilterPassed = false;
-      disqualificationReason = 'Location is not in Barcelona metropolitan area or remote Spain.';
+      disqualificationReason = 'Location or workplace mode does not match the candidate preferences.';
     } else if (extraction.domain_fit === 'unrelated') {
       isHardFilterPassed = false;
       disqualificationReason = 'Domain classified as completely unrelated.';
-    } else if (candidate.requiresConvenio && !extraction.is_university_internship) {
+    } else if (
+      (candidate.requiresConvenio || this.requiresContract(candidate.contractTypes, 'convenio')) &&
+      !extraction.is_university_internship
+    ) {
       isHardFilterPassed = false;
       disqualificationReason = 'Candidate requires university agreement (convenio) but role does not accommodate students.';
+    } else if (
+      this.requiresContract(candidate.contractTypes, 'erasmus') &&
+      !extraction.accepts_erasmus_traineeship
+    ) {
+      isHardFilterPassed = false;
+      disqualificationReason = 'Candidate requires an Erasmus+ traineeship but the posting does not confirm support.';
     } else if (candidate.englishOnly && extraction.working_language === 'other') {
       isHardFilterPassed = false;
       disqualificationReason = 'Working language is incompatible with English requirements.';
@@ -140,7 +157,7 @@ export class MatcherService {
     const telegramCardSummary = this.formatTelegramCard({
       jobTitle: job.title,
       companyName: job.companyName,
-      location: job.locationRaw || 'Barcelona, Spain',
+      location: job.locationRaw || 'Unknown location',
       workplaceType: job.workplaceType || 'hybrid',
       jobUrl: job.url,
       overallScore,
@@ -168,6 +185,31 @@ export class MatcherService {
       matchReasoning: extraction.fit_reasoning,
       telegramCardSummary,
     };
+  }
+
+  private locationMatches(
+    location: string | undefined,
+    workplaceType: string | undefined,
+    preferredLocations: string[] | undefined,
+    remotePreference: 'remote' | 'hybrid' | 'onsite' | 'any' | undefined
+  ): boolean {
+    const preferences = (preferredLocations || []).map((value) => value.trim().toLowerCase()).filter(Boolean);
+    const locationText = (location || '').toLowerCase();
+    const workplace = (workplaceType || 'unknown').toLowerCase();
+
+    if (remotePreference === 'remote' && workplace !== 'remote') return false;
+    if (remotePreference === 'onsite' && workplace === 'remote') return false;
+    if (preferences.length === 0 || preferences.includes('anywhere') || preferences.includes('worldwide')) return true;
+
+    return preferences.some((preference) =>
+      preference === 'remote'
+        ? workplace === 'remote'
+        : locationText.includes(preference) || preference.includes(locationText)
+    );
+  }
+
+  private requiresContract(contractTypes: string[] | undefined, keyword: string): boolean {
+    return (contractTypes || []).some((contract) => contract.toLowerCase().includes(keyword));
   }
 
   /**

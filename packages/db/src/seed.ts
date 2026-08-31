@@ -654,6 +654,7 @@ const DEFAULT_SEED_USER: NewUser = {
       'AI/ML Engineering Intern',
       'Product Design Intern',
     ],
+    disciplines: ['Software Engineering', 'Product Design'],
     skills: [
       'TypeScript',
       'JavaScript',
@@ -668,6 +669,7 @@ const DEFAULT_SEED_USER: NewUser = {
     ],
     languages: ['English', 'Spanish', 'Catalan'],
     preferredLocations: ['Barcelona', 'Sant Cugat', 'Remote'],
+    contractTypes: ['Any Contract'],
     remotePreference: 'hybrid',
     maxCommuteMinutes: 45,
     educationLevel: "Bachelor's Degree / Student",
@@ -681,7 +683,7 @@ const DEFAULT_SEED_USER: NewUser = {
     minScoreThreshold: 0.60,
     telegramNotificationsEnabled: true,
     hardFilters: {
-      mustBeInBarcelona: true,
+      mustMatchPreferredLocations: true,
       requirePaidOnly: false,
     },
   },

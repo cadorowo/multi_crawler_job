@@ -2,11 +2,11 @@ import { type Context } from 'grammy';
 import pdfParse from 'pdf-parse';
 import { db, users, eq } from '@bcn-intern-bot/db';
 import {
-  getLlmClient,
   candidateExtractionSchema,
   getEmbedder,
   EmbedderService,
 } from '@bcn-intern-bot/llm';
+import { paseoBridge } from '../paseo_bridge.js';
 
 export async function handleCvUpload(ctx: Context): Promise<void> {
   const document = ctx.message?.document;
@@ -52,41 +52,37 @@ export async function handleCvUpload(ctx: Context): Promise<void> {
     await ctx.api.editMessageText(
       ctx.chat!.id,
       statusMsg.message_id,
-      '⏳ *Processing your CV...*\n1. Text extracted ✅\n2. AI extracting skills, tools & roles with OpenCode/GPT-4o...',
+      '⏳ *Processing your CV...*\n1. Text extracted ✅\n2. Paseo is extracting skills, tools & roles...',
       { parse_mode: 'Markdown' }
     );
 
     // 3. AI extraction of candidate profile
-    const llmClient = getLlmClient();
-    const systemPrompt = `You are an expert technical recruiter analyzing a student / junior CV for tech and design internship roles in Barcelona.
-Extract the candidate's target roles, technical skills, design tools, development tools, languages, education, Erasmus eligibility, and a concise professional summary.`;
-
-    const userPrompt = `Candidate CV Text:\n${rawCvText.slice(0, 8000)}`;
-
-    const candidateProfile = await llmClient.generateStructuredOutput(
+    const candidateProfile = await paseoBridge.runStructured(
       candidateExtractionSchema,
-      systemPrompt,
-      userPrompt,
-      { temperature: 0.1 }
+      {
+        prompt: `You are Paseo, an expert recruiter for internships and entry-level roles worldwide. Analyze this CV and extract the candidate's target roles, technical skills, design tools, development tools, languages, education, Erasmus eligibility, and a concise professional summary. Do not invent qualifications.\n\nCandidate CV Text:\n${rawCvText.slice(0, 8000)}`,
+      }
     );
 
     await ctx.api.editMessageText(
       ctx.chat!.id,
       statusMsg.message_id,
-      '⏳ *Processing your CV...*\n1. Text extracted ✅\n2. Profile structured ✅\n3. Generating 1536-dim semantic vector embedding...',
+      '⏳ *Processing your CV...*\n1. Text extracted ✅\n2. Profile structured ✅\n3. Preparing semantic matching profile...',
       { parse_mode: 'Markdown' }
     );
 
     // 4. Generate candidate vector embedding
-    const embedder = getEmbedder();
-    const candidateEmbeddingText = EmbedderService.buildCandidateEmbeddingInput({
-      targetRoles: candidateProfile.targetRoles,
-      skills: candidateProfile.primarySkills,
-      tools: [...candidateProfile.designTools, ...candidateProfile.developmentTools],
-      bio: candidateProfile.summary,
-    });
-
-    const embedding = await embedder.embedText(candidateEmbeddingText);
+    let embedding: number[] | undefined;
+    if (process.env.OPENAI_API_KEY || process.env.OPENCODE_API_KEY) {
+      const embedder = getEmbedder();
+      const candidateEmbeddingText = EmbedderService.buildCandidateEmbeddingInput({
+        targetRoles: candidateProfile.targetRoles,
+        skills: candidateProfile.primarySkills,
+        tools: [...candidateProfile.designTools, ...candidateProfile.developmentTools],
+        bio: candidateProfile.summary,
+      });
+      embedding = await embedder.embedText(candidateEmbeddingText);
+    }
 
     // 5. Upsert user in database
     const telegramId = String(ctx.from!.id);
@@ -95,12 +91,14 @@ Extract the candidate's target roles, technical skills, design tools, developmen
         candidateProfile.targetRoles.length > 0
           ? candidateProfile.targetRoles
           : ['Software Engineer Intern', 'Product Design Intern'],
+      disciplines: [],
       skills:
         candidateProfile.primarySkills.length > 0
           ? candidateProfile.primarySkills
           : ['TypeScript', 'React', 'Figma'],
       languages: candidateProfile.languages.map((l) => l.language),
-      preferredLocations: ['Barcelona', 'Sant Cugat', 'Remote'],
+      preferredLocations: [],
+      contractTypes: candidateProfile.erasmusEligible ? ['Erasmus+'] : [],
       remotePreference: 'hybrid' as const,
       visaRequired: !candidateProfile.erasmusEligible,
       bio: candidateProfile.summary,
@@ -110,13 +108,26 @@ Extract the candidate's target roles, technical skills, design tools, developmen
     const existingUser = await db.query.users.findFirst({
       where: eq(users.telegramId, telegramId),
     });
+    const persistedProfileData = existingUser
+      ? {
+          ...existingUser.profile,
+          ...userProfileData,
+          disciplines: existingUser.profile.disciplines || [],
+          preferredLocations: existingUser.profile.preferredLocations || [],
+          contractTypes:
+            existingUser.profile.contractTypes?.length
+              ? existingUser.profile.contractTypes
+              : userProfileData.contractTypes,
+          remotePreference: existingUser.profile.remotePreference || userProfileData.remotePreference,
+        }
+      : userProfileData;
 
     if (existingUser) {
       await db
         .update(users)
         .set({
           fullName: candidateProfile.fullName || existingUser.fullName,
-          profile: userProfileData,
+          profile: persistedProfileData,
           embedding,
           updatedAt: new Date(),
         })
@@ -127,14 +138,14 @@ Extract the candidate's target roles, technical skills, design tools, developmen
         telegramUsername: ctx.from?.username,
         telegramChatId: String(ctx.chat!.id),
         fullName: candidateProfile.fullName || ctx.from?.first_name || 'Candidate',
-        profile: userProfileData,
+        profile: persistedProfileData,
         embedding,
       });
     }
 
     // 6. Build beautiful confirmation message
-    const rolesText = userProfileData.targetRoles.map((r) => `• ${r}`).join('\n');
-    const skillsText = userProfileData.skills.join(', ');
+    const rolesText = persistedProfileData.targetRoles.map((r) => `• ${r}`).join('\n');
+    const skillsText = persistedProfileData.skills.join(', ');
     const toolsText = [
       ...candidateProfile.designTools,
       ...candidateProfile.developmentTools,
@@ -143,7 +154,7 @@ Extract the candidate's target roles, technical skills, design tools, developmen
       .map((l) => `${l.language} (${l.proficiency})`)
       .join(', ');
 
-    const confirmationText = `🎉 *CV Successfully Analyzed & Profile Updated!*
+    const confirmationText = `🎉 *CV Analizzato e Profilo JobFinder Aggiornato!*
 
 👤 *Name:* ${candidateProfile.fullName || ctx.from?.first_name || 'Candidate'}
 🎓 *Status:* ${candidateProfile.currentStatus}
@@ -159,7 +170,7 @@ ${rolesText}
 💡 *AI Profile Summary:*
 _${candidateProfile.summary}_
 
-🚀 *You are all set!* The discovery bot will now match you with new Barcelona internships and notify you in real time.`;
+🚀 *Tutto pronto!* JobFinder userà il tuo profilo per opportunità compatibili con le tue località e preferenze.`;
 
     await ctx.api.editMessageText(ctx.chat!.id, statusMsg.message_id, confirmationText, {
       parse_mode: 'Markdown',

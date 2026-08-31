@@ -47,7 +47,7 @@ export abstract class BaseAdapter {
           signal: controller.signal,
           headers: {
             Accept: 'application/json, text/plain, */*',
-            'User-Agent': 'Barcelona-Internship-Bot/1.0 (+https://github.com/bcn-intern-bot)',
+            'User-Agent': 'JobFinder/1.0',
             ...options.headers,
           },
         });

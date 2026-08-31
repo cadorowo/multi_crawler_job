@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import { db, companies, jobs, eq } from '@bcn-intern-bot/db';
-import { getAdapter, JobSpyAdapter } from '@bcn-intern-bot/adapters';
+import { AtsScrapersAdapter, getAdapter } from '@bcn-intern-bot/adapters';
 import { getBouncer, getEmbedder, EmbedderService } from '@bcn-intern-bot/llm';
 import { logger, notifyAdmin } from '../logger.js';
 import type PgBoss from 'pg-boss';
 
-const JOBSPY_SEARCH_QUERIES = [
+const ATS_SCRAPERS_SEARCH_QUERIES = [
   'UX UI Design Intern',
   'Product Design Intern',
   'Software Engineer Intern',
@@ -19,7 +19,7 @@ export async function runCrawlAll(boss?: PgBoss): Promise<{
   totalIndexed: number;
   errors: number;
 }> {
-  logger.info('🚀 Starting Master Ingestion Crawl for all active Barcelona companies & Aggregators...');
+  logger.info('🚀 Starting JobFinder ingestion crawl for all active companies and aggregators...');
 
   const activeCompanies = await db.query.companies.findMany({
     where: eq(companies.isActive, true),
@@ -58,14 +58,14 @@ export async function runCrawlAll(boss?: PgBoss): Promise<{
 
       for (const normalized of result.jobs) {
         // Compute SHA-256 fingerprint for deduplication
-        const fingerprintInput = `${company.id}:${normalized.title.toLowerCase().trim()}:${normalized.normalizedLocation || 'Barcelona, Spain'}`;
+        const fingerprintInput = `${company.id}:${normalized.title.toLowerCase().trim()}:${normalized.normalizedLocation || 'Unknown location'}`;
         const fingerprint = createHash('sha256').update(fingerprintInput).digest('hex');
 
         // Check 2-Pass Bouncer
         const bouncerResult = await bouncer.evaluateJob({
           title: normalized.title,
           companyName: company.name,
-          location: normalized.normalizedLocation || normalized.locationRaw || 'Barcelona, Spain',
+          location: normalized.normalizedLocation || normalized.locationRaw || 'Unknown location',
           descriptionText: normalized.descriptionText,
         });
 
@@ -125,6 +125,18 @@ export async function runCrawlAll(boss?: PgBoss): Promise<{
               ? [bouncerResult.extraction.working_language]
               : ['English'],
             salary: normalized.salary || {},
+            classification: bouncerResult.extraction
+              ? {
+                  isUniversityInternship: bouncerResult.extraction.is_university_internship,
+                  acceptsErasmusTraineeship: bouncerResult.extraction.accepts_erasmus_traineeship,
+                  workingLanguage: bouncerResult.extraction.working_language,
+                  domainFit: bouncerResult.extraction.domain_fit,
+                  requiredTools: bouncerResult.extraction.required_tools,
+                  keyTasks: bouncerResult.extraction.key_tasks_summary,
+                  fitReasoning: bouncerResult.extraction.fit_reasoning,
+                  calculatedFitScore: bouncerResult.extraction.calculated_fit_score,
+                }
+              : { requiredTools: [], keyTasks: [] },
             rawPayload: normalized.rawPayload || {},
             embedding: embedding,
             status: 'active',
@@ -141,6 +153,21 @@ export async function runCrawlAll(boss?: PgBoss): Promise<{
               lastSeenAt: now,
               updatedAt: now,
               ...(embedding ? { embedding } : {}),
+              summary: bouncerResult.extraction?.fit_reasoning || normalized.title,
+              requirements: bouncerResult.extraction?.key_tasks_summary || [],
+              skills: bouncerResult.extraction?.required_tools || [],
+              classification: bouncerResult.extraction
+                ? {
+                    isUniversityInternship: bouncerResult.extraction.is_university_internship,
+                    acceptsErasmusTraineeship: bouncerResult.extraction.accepts_erasmus_traineeship,
+                    workingLanguage: bouncerResult.extraction.working_language,
+                    domainFit: bouncerResult.extraction.domain_fit,
+                    requiredTools: bouncerResult.extraction.required_tools,
+                    keyTasks: bouncerResult.extraction.key_tasks_summary,
+                    fitReasoning: bouncerResult.extraction.fit_reasoning,
+                    calculatedFitScore: bouncerResult.extraction.calculated_fit_score,
+                  }
+                : { requiredTools: [], keyTasks: [] },
             },
           });
 
@@ -183,27 +210,27 @@ export async function runCrawlAll(boss?: PgBoss): Promise<{
     }
   }
 
-  // 2. Secondary Aggregator Run: JobSpy (LinkedIn, Indeed, Glassdoor)
-  logger.info('🔍 Running secondary JobSpy aggregator crawl across Barcelona queries...');
+  // 2. Secondary source: local ats-scrapers dataset and its supported ATS feeds.
+  logger.info('🔍 Searching the local ats-scrapers dataset across configured global queries...');
   try {
-    const jobSpyAdapter = new JobSpyAdapter();
+    const atsScrapersAdapter = new AtsScrapersAdapter();
 
     // Ensure an aggregator fallback company exists for external jobs
     let aggregatorCompany = await db.query.companies.findFirst({
-      where: eq(companies.slug, 'jobspy-aggregator'),
+      where: eq(companies.slug, 'ats-scrapers-dataset'),
     });
 
     if (!aggregatorCompany) {
       const [newCompany] = await db
         .insert(companies)
         .values({
-          name: 'Aggregator Postings',
-          slug: 'jobspy-aggregator',
-          atsProvider: 'jobspy' as any,
-          atsIdentifier: 'jobspy',
-          location: 'Barcelona, Spain',
-          isBarcelonaHq: true,
-          hasBarcelonaOffice: true,
+          name: 'ats-scrapers Dataset',
+          slug: 'ats-scrapers-dataset',
+          atsProvider: 'ats_scrapers' as any,
+          atsIdentifier: 'ats_scrapers',
+          location: process.env.ATS_SCRAPER_LOCATION || 'Remote',
+          isBarcelonaHq: false,
+          hasBarcelonaOffice: false,
           tier: 3,
         })
         .returning();
@@ -211,16 +238,17 @@ export async function runCrawlAll(boss?: PgBoss): Promise<{
     }
 
     if (aggregatorCompany) {
-      for (const query of JOBSPY_SEARCH_QUERIES) {
-        logger.info({ query }, 'Executing JobSpy search...');
-        const result = await jobSpyAdapter.fetchJobs(
+      for (const query of ATS_SCRAPERS_SEARCH_QUERIES) {
+        logger.info({ query }, 'Executing ats-scrapers search...');
+        const result = await atsScrapersAdapter.fetchJobs(
           {
             companyId: aggregatorCompany.id,
-            companyName: 'Barcelona Aggregator',
-            companySlug: 'jobspy-aggregator',
-            atsProvider: 'jobspy',
+            companyName: 'ats-scrapers Dataset',
+            companySlug: 'ats-scrapers-dataset',
+            atsProvider: 'ats_scrapers',
             atsIdentifier: query,
-            isBarcelonaHq: true,
+            atsApiEndpoint: process.env.ATS_SCRAPER_LOCATION,
+            isBarcelonaHq: false,
           },
           { limit: 15 }
         );
@@ -228,14 +256,14 @@ export async function runCrawlAll(boss?: PgBoss): Promise<{
         totalFetched += result.rawCount;
 
         for (const normalized of result.jobs) {
-          const rawCompany = (normalized.rawPayload?.company as string) || 'Barcelona Tech Startup';
-          const fingerprintInput = `jobspy:${rawCompany.toLowerCase()}:${normalized.title.toLowerCase().trim()}:${normalized.normalizedLocation}`;
+          const rawCompany = (normalized.rawPayload?.company as string) || 'Unknown company';
+          const fingerprintInput = `ats-scrapers:${rawCompany.toLowerCase()}:${normalized.title.toLowerCase().trim()}:${normalized.normalizedLocation}`;
           const fingerprint = createHash('sha256').update(fingerprintInput).digest('hex');
 
           const bouncerResult = await bouncer.evaluateJob({
             title: normalized.title,
             companyName: rawCompany,
-            location: normalized.normalizedLocation || 'Barcelona, Spain',
+            location: normalized.normalizedLocation || 'Unknown location',
             descriptionText: normalized.descriptionText,
           });
 
@@ -283,6 +311,18 @@ export async function runCrawlAll(boss?: PgBoss): Promise<{
                 ? [bouncerResult.extraction.working_language]
                 : ['English'],
               salary: normalized.salary || {},
+              classification: bouncerResult.extraction
+                ? {
+                    isUniversityInternship: bouncerResult.extraction.is_university_internship,
+                    acceptsErasmusTraineeship: bouncerResult.extraction.accepts_erasmus_traineeship,
+                    workingLanguage: bouncerResult.extraction.working_language,
+                    domainFit: bouncerResult.extraction.domain_fit,
+                    requiredTools: bouncerResult.extraction.required_tools,
+                    keyTasks: bouncerResult.extraction.key_tasks_summary,
+                    fitReasoning: bouncerResult.extraction.fit_reasoning,
+                    calculatedFitScore: bouncerResult.extraction.calculated_fit_score,
+                  }
+                : { requiredTools: [], keyTasks: [] },
               rawPayload: normalized.rawPayload || {},
               embedding: embedding,
               status: 'active',
@@ -299,6 +339,21 @@ export async function runCrawlAll(boss?: PgBoss): Promise<{
                 lastSeenAt: now,
                 updatedAt: now,
                 ...(embedding ? { embedding } : {}),
+                summary: bouncerResult.extraction?.fit_reasoning || normalized.title,
+                requirements: bouncerResult.extraction?.key_tasks_summary || [],
+                skills: bouncerResult.extraction?.required_tools || [],
+                classification: bouncerResult.extraction
+                  ? {
+                      isUniversityInternship: bouncerResult.extraction.is_university_internship,
+                      acceptsErasmusTraineeship: bouncerResult.extraction.accepts_erasmus_traineeship,
+                      workingLanguage: bouncerResult.extraction.working_language,
+                      domainFit: bouncerResult.extraction.domain_fit,
+                      requiredTools: bouncerResult.extraction.required_tools,
+                      keyTasks: bouncerResult.extraction.key_tasks_summary,
+                      fitReasoning: bouncerResult.extraction.fit_reasoning,
+                      calculatedFitScore: bouncerResult.extraction.calculated_fit_score,
+                    }
+                  : { requiredTools: [], keyTasks: [] },
               },
             });
 
@@ -307,7 +362,7 @@ export async function runCrawlAll(boss?: PgBoss): Promise<{
       }
     }
   } catch (aggErr: any) {
-    logger.warn({ err: aggErr.message }, 'JobSpy aggregator search skipped / errored');
+    logger.warn({ err: aggErr.message }, 'ats-scrapers dataset search skipped / errored');
   }
 
   logger.info(

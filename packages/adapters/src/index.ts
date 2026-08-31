@@ -7,4 +7,4 @@ export * from './adapters/ashby.js';
 export * from './adapters/teamtailor.js';
 export * from './adapters/factorial.js';
 export * from './adapters/workable.js';
-export * from './adapters/jobspy.js';
+export * from './adapters/ats-scrapers.js';

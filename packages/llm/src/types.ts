@@ -20,6 +20,12 @@ export const jobExtractionSchema = z.object({
       'automation_website_design',
       'ai_design',
       'other_tech',
+      'engineering',
+      'data_ai',
+      'marketing',
+      'finance',
+      'operations',
+      'business',
       'unrelated',
     ])
     .describe('Domain classification of the role'),
@@ -37,7 +43,7 @@ export const jobExtractionSchema = z.object({
   fit_reasoning: z
     .string()
     .describe(
-      'Clear reasoning explaining why this job fits or does not fit a design/engineering student candidate in Barcelona'
+      'Clear reasoning explaining why this opportunity fits or does not fit the candidate profile'
     ),
   calculated_fit_score: z
     .number()
@@ -93,6 +99,12 @@ export interface MatchScoreResult {
     | 'automation_website_design'
     | 'ai_design'
     | 'other_tech'
+    | 'engineering'
+    | 'data_ai'
+    | 'marketing'
+    | 'finance'
+    | 'operations'
+    | 'business'
     | 'unrelated';
   matchingTools: string[];
   missingTools: string[];

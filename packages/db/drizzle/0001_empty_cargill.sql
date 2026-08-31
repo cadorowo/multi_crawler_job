@@ -1,0 +1,1 @@
+ALTER TABLE "users" ALTER COLUMN "preferences" SET DEFAULT '{"notificationFrequency":"instant","minScoreThreshold":0.65,"telegramNotificationsEnabled":true,"hardFilters":{"mustMatchPreferredLocations":true,"requirePaidOnly":false}}'::jsonb;

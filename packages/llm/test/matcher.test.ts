@@ -9,6 +9,9 @@ describe('MatcherService - Hybrid Ranking & Score Calculator', () => {
     targetRoles: ['UX/UI Design Intern', 'Frontend Engineering Intern'],
     skills: ['TypeScript', 'React', 'HTML/CSS', 'Tailwind'],
     tools: ['Figma', 'Framer'],
+    preferredLocations: ['Barcelona'],
+    remotePreference: 'hybrid' as const,
+    contractTypes: ['Convenio'],
     requiresConvenio: true,
     englishOnly: false,
   };
@@ -35,7 +38,6 @@ describe('MatcherService - Hybrid Ranking & Score Calculator', () => {
         companyTier: 1,
         url: 'https://careers.typeform.com/jobs/1234',
         locationRaw: 'Barcelona, Spain',
-        isBarcelona: true,
         workplaceType: 'hybrid',
         descriptionText: 'Join Typeform as a design intern...',
       },
@@ -56,7 +58,7 @@ describe('MatcherService - Hybrid Ranking & Score Calculator', () => {
     expect(result.telegramCardSummary).toContain('Match Score:');
   });
 
-  it('disqualifies a role outside Barcelona despite a high LLM fit score', () => {
+  it('disqualifies a role outside the candidate preferred locations despite a high LLM fit score', () => {
     const extraction: JobExtractionResult = {
       is_university_internship: true,
       accepts_erasmus_traineeship: false,
@@ -75,7 +77,6 @@ describe('MatcherService - Hybrid Ranking & Score Calculator', () => {
         companyTier: 2,
         url: 'https://careers.london.com/jobs/567',
         locationRaw: 'London, United Kingdom',
-        isBarcelona: false, // Not Barcelona
         workplaceType: 'onsite',
         descriptionText: 'Must be present in our London office.',
       },
@@ -87,7 +88,7 @@ describe('MatcherService - Hybrid Ranking & Score Calculator', () => {
 
     expect(result.isHardFilterPassed).toBe(false);
     expect(result.shouldNotify).toBe(false);
-    expect(result.disqualificationReason).toContain('Location is not in Barcelona');
+    expect(result.disqualificationReason).toContain('Location or workplace mode');
   });
 
   it('disqualifies when candidate requires university agreement but role does not support it', () => {
@@ -109,7 +110,6 @@ describe('MatcherService - Hybrid Ranking & Score Calculator', () => {
         companyTier: 2,
         url: 'https://careers.bcn.com/jobs/999',
         locationRaw: 'Barcelona, Spain',
-        isBarcelona: true,
         workplaceType: 'hybrid',
         descriptionText: 'Regular employment.',
       },
@@ -143,7 +143,6 @@ describe('MatcherService - Hybrid Ranking & Score Calculator', () => {
         companyTier: 3,
         url: 'https://careers.hardware.com/jobs/111',
         locationRaw: 'Barcelona, Spain',
-        isBarcelona: true,
         workplaceType: 'onsite',
         descriptionText: 'Firmware testing internship...',
       },

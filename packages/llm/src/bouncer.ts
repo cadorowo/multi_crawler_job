@@ -126,28 +126,22 @@ export class BouncerService {
     location?: string;
     descriptionText: string;
   }): Promise<JobExtractionResult> {
-    const systemPrompt = `You are an expert technical recruiter specializing in university internships and junior opportunities in Barcelona.
+    const systemPrompt = `You are an expert recruiter specializing in university internships and junior opportunities worldwide.
 Your role is to analyze the provided job posting and extract structured facts with high precision.
 
-Target Candidate Profile:
-- Current design and software engineering student or recent graduate seeking an internship in Barcelona.
-- Areas of interest: UX/UI design, automation / website design, AI design, and modern web/software development (TypeScript, React, Python).
-- Looking for roles in English-friendly or bilingual tech scaleups and creative agencies.
-- Needs to know whether a university agreement (convenio de prácticas) or Erasmus+ traineeship is supported or required.
-
-Extraction Rules:
+    Extraction Rules:
 1. is_university_internship: true if explicitly mentioned or suitable for active students / requires university enrollment.
 2. accepts_erasmus_traineeship: true if European students / Erasmus+ grant holders can apply or work in English/hybrid setup.
 3. working_language: classify as english, spanish, catalan, bilingual, or other.
-4. domain_fit: classify as ux_ui_design, automation_website_design, ai_design, other_tech, or unrelated.
+    4. domain_fit: classify as ux_ui_design, automation_website_design, ai_design, other_tech, engineering, data_ai, marketing, finance, operations, business, or unrelated.
 5. required_tools: list specific technologies and design tools found (Figma, Framer, React, TypeScript, Python, Node, Next.js, etc.).
 6. key_tasks_summary: 3 to 5 clear, concise bullet points summarizing actual responsibilities.
 7. fit_reasoning: 2-3 sentences explaining why this role is or isn't a great match for a tech/design intern.
-8. calculated_fit_score: integer from 0 to 100 representing overall quality and relevance.`;
+    8. calculated_fit_score: integer from 0 to 100 representing internship relevance and evidence quality, not a claim of compatibility with an unknown user.`;
 
     const userPrompt = `Job Title: ${job.title}
 Company: ${job.companyName || 'Unknown'}
-Location: ${job.location || 'Barcelona, Spain'}
+Location: ${job.location || 'Unknown location'}
 
 Description:
 ${job.descriptionText.slice(0, 5000)}`;

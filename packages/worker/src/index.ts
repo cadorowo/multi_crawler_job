@@ -8,7 +8,7 @@ export * from './jobs/match-and-notify.js';
 export * from './jobs/detect-stale.js';
 
 async function main() {
-  logger.info('🚀 Launching Barcelona Internship Discovery Worker Service...');
+  logger.info('🚀 Launching JobFinder Worker Service...');
 
   const handleShutdown = async (signal: string) => {
     logger.info(`\n🛑 Received ${signal}. Shutting down worker...`);

@@ -7,6 +7,7 @@ export const atsProviderEnum = pgEnum('ats_provider', [
   'teamtailor',
   'factorial',
   'workable',
+  'ats_scrapers',
   'smartrecruiters',
   'recruitee',
   'personio',

@@ -22,28 +22,34 @@ export async function handleStart(ctx: Context): Promise<void> {
         });
       }
     } catch (err) {
-      console.log(`[TelegramBot] Notice: DB is currently offline or unreachable (${(err as any)?.message}). Proceeding in lightweight memory mode.`);
+      console.log(`[JobFinder] Database unavailable during onboarding: ${(err as any)?.message}`);
     }
   }
 
-  const welcomeMessage = `👋 *Hola ${username}! Welcome to Barcelona Internship Discovery Bot* 🚀
+  const welcomeMessage = `👋 *Ciao ${username}! Benvenuto in JobFinder* 🚀
 
-This bot constantly monitors *35+ top Barcelona tech scaleups, unicorns, and creative design studios* (Typeform, Glovo, TravelPerk, Factorial, Wallapop, Adevinta, Coverflex, Belvo, and more) across Greenhouse, Lever, Ashby, Teamtailor, Factorial, and Workable.
-
----
-
-### 🌟 *How to get started:*
-1. 📄 *Upload your CV (PDF):* Simply send your CV directly to this chat. Our AI will extract your skills, tools (Figma, React, TypeScript), and target roles.
-2. 🎯 *Automatic AI Matching:* You'll receive real-time alerts whenever a relevant internship (Score ≥ 60%) is posted in Barcelona.
-3. 💼 *Application Tracking:* Use inline buttons to save or mark jobs as applied.
+JobFinder trova opportunità di stage e junior role in base al tuo profilo, alle località desiderate e ai vincoli contrattuali. Paseo è il bridge intelligente che ti aiuta con richieste naturali.
 
 ---
 
-### 🛠 *Available Commands:*
-• /profile - View and customize your target roles and skills
-• /my_applications - Track active job applications and interviews
-• /stats - View database and crawling statistics
-• /help - Display this guide again`;
+*Come iniziare:*
+1. ⚙️ Usa \`/setup\` per impostare ruoli, località, modalità e contratto.
+2. 📄 Invia il tuo CV in PDF per arricchire automaticamente il profilo tramite Paseo.
+3. 🎯 Ricevi match e notifiche quando vengono indicizzate opportunità compatibili.
+4. 💼 Salva le opportunità o segna le candidature direttamente dalle card.
+
+---
+
+*Comandi:*
+• \`/setup <ruoli> | <località> | <modalità> | <contratti> | <lingue>\`
+• \`/profile\` — visualizza il profilo
+• \`/matches\` — ultimi match notificati
+• \`/search <parola chiave>\` — cerca nell’indice
+• \`/my_applications\` — candidature inviate
+• \`/stats\` — stato dell’indice
+
+Esempio:
+\`/setup product design intern | Milano, Berlino, Remote | hybrid | Erasmus+, Convenio | Italiano, English\``;
 
   await ctx.reply(welcomeMessage, { parse_mode: 'Markdown' });
 }

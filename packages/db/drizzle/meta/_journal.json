@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788186494859,
+      "tag": "0000_cooing_talkback",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788186568476,
+      "tag": "0001_empty_cargill",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788186591130,
+      "tag": "0002_wooden_doctor_doom",
+      "breakpoints": true
+    }
+  ]
+}

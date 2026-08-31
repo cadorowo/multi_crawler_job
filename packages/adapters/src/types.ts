@@ -8,7 +8,7 @@ export type AtsProvider =
   | 'factorial'
   | 'workable'
   | 'smartrecruiters'
-  | 'jobspy'
+  | 'ats_scrapers'
   | 'recruitee'
   | 'personio'
   | 'workday'
@@ -42,8 +42,9 @@ export const normalizedJobPayloadSchema = z.object({
   canonicalUrl: z.string().url().optional(),
   alternateUrls: z.array(z.string().url()).default([]),
   locationRaw: z.string().optional(),
-  normalizedLocation: z.string().default('Barcelona, Spain'),
-  isBarcelona: z.boolean().default(true),
+  normalizedLocation: z.string().default('Unknown location'),
+  // Legacy compatibility field. Matching uses normalizedLocation and user preferences.
+  isBarcelona: z.boolean().default(false),
   workplaceType: z.enum(['remote', 'hybrid', 'onsite', 'unknown']).default('unknown'),
   jobType: z
     .enum(['internship', 'working_student', 'graduate', 'junior', 'entry_level', 'trainee', 'unknown'])

@@ -32,7 +32,7 @@ export async function notifyAdmin(
   level: 'error' | 'warn' | 'info' = 'error'
 ): Promise<void> {
   const emoji = level === 'error' ? '🚨 [ERROR]' : level === 'warn' ? '⚠️ [WARN]' : 'ℹ️ [INFO]';
-  const fullText = `${emoji} *Barcelona Bot Alert*\n\n${message}`;
+  const fullText = `${emoji} *JobFinder Alert*\n\n${message}`;
 
   if (!botToken || !adminChatId) {
     logger.debug({ msg: 'Admin notification skipped (no botToken/adminChatId)', text: message });

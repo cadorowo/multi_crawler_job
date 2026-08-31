@@ -6,10 +6,10 @@ import fs from 'node:fs';
 dotenv.config({ path: resolve(process.cwd(), '../../.env') });
 dotenv.config();
 
-const token = process.env.TELEGRAM_BOT_TOKEN || '8565693353:AAFw7xw2RuweoMVb047-gIjxxCrcDA_5w_s';
+const token = process.env.TELEGRAM_BOT_TOKEN;
 const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID || '159450250';
 
-const bot = new Bot(token);
+const bot = new Bot(token || 'dummy-token-for-initialization');
 
 interface JobItem {
   id: string;
@@ -25,6 +25,9 @@ interface JobItem {
 }
 
 async function runCandidateMatching() {
+  if (!token) {
+    throw new Error('TELEGRAM_BOT_TOKEN is required to send candidate matches.');
+  }
   console.log('═══════════════════════════════════════════════════════════════════════════════');
   console.log(' 🎯 TAILORED PROFILE MATCHING ENGINE FOR POLITO DESIGN CANDIDATE');
   console.log(` Candidate: @dogo_time (ID: ${adminChatId})`);
@@ -90,6 +93,7 @@ async function runCandidateMatching() {
   try {
     for (let i = 0; i < Math.min(3, topJobs.length); i++) {
       const j = topJobs[i];
+      if (!j) continue;
       const keyboard = new InlineKeyboard()
         .url('🔗 Apply on Official Portal', j.applyUrl)
         .row()
