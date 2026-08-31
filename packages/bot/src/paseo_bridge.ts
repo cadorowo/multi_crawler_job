@@ -54,19 +54,32 @@ async function getUpdates() {
   });
 }
 
-async function sendMessage(chatId: number, text: string, replyToId?: number) {
+async function sendMessage(chatId: number, text: string, replyToId?: number, useMarkdown = false) {
   const MAX = 4096;
   const chunks: string[] = [];
   for (let i = 0; i < text.length; i += MAX) {
     chunks.push(text.slice(i, i + MAX));
   }
   for (const chunk of chunks) {
-    await tgFetch('sendMessage', {
+    const payload: Record<string, unknown> = {
       chat_id: chatId,
       text: chunk,
-      parse_mode: 'Markdown',
       ...(replyToId ? { reply_to_message_id: replyToId } : {}),
-    });
+    };
+    if (useMarkdown) {
+      payload.parse_mode = 'Markdown';
+    }
+    const result = await tgFetch('sendMessage', payload);
+    if (!result.ok && useMarkdown) {
+      // Markdown failed — retry as plain text
+      console.log(`   ⚠️ Markdown parse error, retrying as plain text: ${result.description}`);
+      const plainPayload: Record<string, unknown> = {
+        chat_id: chatId,
+        text: chunk,
+        ...(replyToId ? { reply_to_message_id: replyToId } : {}),
+      };
+      await tgFetch('sendMessage', plainPayload);
+    }
   }
 }
 
@@ -75,12 +88,20 @@ async function sendTyping(chatId: number) {
 }
 
 // ── AGY CLI call ─────────────────────────────────────────────────────────────
+//
+// We use --continue so every Telegram message is a new turn in the SAME
+// ongoing agy conversation. This gives the agent full persistent memory of:
+//   • The project structure and AGENTS.md context
+//   • Previous user requests and what was done
+//   • Files already read/modified this session
+//
 async function callAgy(prompt: string): Promise<string> {
   // Escape single quotes for shell safety
   const safePrompt = prompt.replace(/'/g, "'\\''");
-  const cmd = `${AGY_BIN} --print '${safePrompt}' --dangerously-skip-permissions`;
+  const cmd = `${AGY_BIN} --print '${safePrompt}' --continue --dangerously-skip-permissions`;
 
-  console.log(`\n🤖 Calling agy:\n   cwd: ${WORKSPACE}\n   cmd: ${cmd.slice(0, 120)}...`);
+  console.log(`\n🤖 Calling agy (--continue):\n   cwd: ${WORKSPACE}\n   cmd: ${cmd.slice(0, 160)}...`);
+
 
   try {
     const { stdout, stderr } = await execAsync(cmd, {
@@ -134,7 +155,8 @@ async function handleMessage(msg: any) {
     await sendMessage(
       chatId,
       `⚡ *Running your task with AGY…*\n\`\`\`\n${text.slice(0, 200)}\n\`\`\``,
-      msgId
+      msgId,
+      true
     );
     await sendTyping(chatId);
 
@@ -144,10 +166,10 @@ async function handleMessage(msg: any) {
 
     // Prefix with a header
     const reply = `🤖 *AGY Response:*\n\n${result}`;
-    await sendMessage(chatId, reply, msgId);
+    await sendMessage(chatId, reply, msgId, true);
   } catch (err: any) {
     console.error(`   ❌ AGY error:`, err.message);
-    await sendMessage(chatId, `❌ *Error running AGY:*\n\`${err.message}\``, msgId);
+    await sendMessage(chatId, `❌ *Error running AGY:*\n\`${err.message}\``, msgId, true);
   } finally {
     pendingMessages.delete(chatId);
   }
