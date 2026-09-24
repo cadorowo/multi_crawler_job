@@ -3,7 +3,7 @@ import os
 import json
 import pandas as pd
 
-ATS_SCRAPER_DIR = "/Users/cadowo/Library/Mobile Documents/com~apple~CloudDocs/Documents/projects/vibes/ats_scraper"
+ATS_SCRAPER_DIR = os.getenv("ATS_SCRAPER_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), "../../ats_scraper")))
 
 def extract_clean_internships():
     parquet_path = os.path.join(ATS_SCRAPER_DIR, "ux_ui_internships.parquet")

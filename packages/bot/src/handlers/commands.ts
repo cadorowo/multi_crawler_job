@@ -1,5 +1,6 @@
 import { type Context } from 'grammy';
 import { db, users, jobs, companies, userJobInteractions, eq, and, desc, count, ilike, or } from '@bcn-intern-bot/db';
+import { searchOnDemand } from '../services/on-demand-search.js';
 
 export async function handleProfile(ctx: Context): Promise<void> {
   const telegramId = ctx.from?.id ? String(ctx.from.id) : null;
@@ -99,21 +100,15 @@ export async function handleSearch(ctx: Context): Promise<void> {
     return;
   }
 
-  const pattern = `%${query}%`;
-  const results = await db.query.jobs.findMany({
-    where: and(
-      eq(jobs.status, 'active'),
-      or(
-        ilike(jobs.title, pattern),
-        ilike(jobs.descriptionText, pattern),
-        ilike(jobs.normalizedLocation, pattern),
-        ilike(jobs.locationRaw, pattern)
-      )
-    ),
-    with: { company: true },
-    limit: 5,
-    orderBy: [desc(jobs.firstSeenAt)],
-  });
+  await ctx.reply('🔎 *Cerco ora su più fonti ATS…*', { parse_mode: 'Markdown' });
+  let results;
+  try {
+    results = await searchOnDemand(query);
+  } catch (error) {
+    console.error('[JobFinder] On-demand search failed', error);
+    await ctx.reply('⚠️ La ricerca sulle fonti ATS non è disponibile in questo momento. Riprova tra poco.');
+    return;
+  }
 
   if (results.length === 0) {
     await ctx.reply(`🔍 Nessuna opportunità attiva trovata per *${query}*. Prova termini più brevi o una località diversa.`, {
@@ -122,13 +117,12 @@ export async function handleSearch(ctx: Context): Promise<void> {
     return;
   }
 
-  const lines = results.map((job, index) => {
-    const company = job.company?.name || 'Unknown company';
-    const location = job.normalizedLocation || job.locationRaw || 'Unknown location';
-    return `${index + 1}. *${company}* — ${job.title}\n📍 ${location}\n🔗 ${job.url}`;
+  const uniqueResults = Array.from(new Map(results.map((job) => [job.url, job])).values()).slice(0, 8);
+  const lines = uniqueResults.map((job, index) => {
+    return `${index + 1}. *${job.company}* — ${job.title}\n📍 ${job.location}\n🔗 ${job.url}`;
   });
 
-  await ctx.reply(`🔍 *${results.length} risultati per "${query}"*\n\n${lines.join('\n\n')}`, {
+  await ctx.reply(`🔍 *${uniqueResults.length} risultati da più fonti per "${query}"*\n\n${lines.join('\n\n')}`, {
     parse_mode: 'Markdown',
     link_preview_options: { is_disabled: true },
   });
@@ -232,8 +226,8 @@ export async function handleStats(ctx: Context): Promise<void> {
 🏢 *Monitored Companies:* ${totalCompaniesRes?.value ?? 0}
 📦 *Total Job Postings Indexed:* ${totalJobsRes?.value ?? 0}
 🎯 *Candidate Matches Evaluated:* ${totalInteractionsRes?.value ?? 0}
-⏱ *Crawl Frequency:* Every 2 hours
-🌐 *ATS Coverage:* Greenhouse, Lever, Ashby, Teamtailor, Factorial, Workable`;
+⏱ *Ricerca:* solo su richiesta utente
+🌐 *ATS Coverage:* fonti configurate in ATS Scrapers`;
 
   await ctx.reply(statsMessage, { parse_mode: 'Markdown' });
 }
@@ -283,7 +277,7 @@ export async function handleAddCompany(ctx: Context): Promise<void> {
     });
 
     await ctx.reply(
-      `✅ *Successfully registered company:* **${name}** (${slug}) on **${atsProvider}**!\nIt will be included in the next crawl cycle.`,
+      `✅ *Successfully registered company:* **${name}** (${slug}) on **${atsProvider}**!\nSarà interrogata solo in una ricerca esplicita.`,
       { parse_mode: 'Markdown' }
     );
   } catch (err: any) {

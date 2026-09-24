@@ -2,7 +2,6 @@ import PgBoss from 'pg-boss';
 import * as dotenv from 'dotenv';
 import { resolve } from 'node:path';
 import { logger, notifyAdmin } from './logger.js';
-import { runCrawlAll } from './jobs/crawl-all.js';
 import { runMatchAndNotify } from './jobs/match-and-notify.js';
 import { runDetectStale } from './jobs/detect-stale.js';
 
@@ -33,11 +32,6 @@ export class WorkerService {
     logger.info('✅ pg-boss background worker connected and initialized.');
 
     // 1. Register Job Handlers
-    await this.boss.work('crawl-all', async () => {
-      logger.info('[Worker] Executing job: crawl-all');
-      await runCrawlAll(this.boss!);
-    });
-
     await this.boss.work('match-and-notify', async () => {
       logger.info('[Worker] Executing job: match-and-notify');
       await runMatchAndNotify();
@@ -48,20 +42,10 @@ export class WorkerService {
       await runDetectStale();
     });
 
-    // 2. Schedule Recurring Cron Jobs
-    // Master Crawl every 2.5 hours (e.g. at minute 0 of every 2nd hour)
-    await this.boss.schedule('crawl-all', '0 */2 * * *', {});
-    logger.info('⏰ Scheduled recurring job: crawl-all (every 2.5 hours)');
-
-    // Detect Stale Jobs every 6 hours
+    // Searches are triggered directly by `/search`; no recurring crawler runs.
+    // Keep stale-record cleanup on a modest schedule.
     await this.boss.schedule('detect-stale', '0 */6 * * *', {});
     logger.info('⏰ Scheduled recurring job: detect-stale (every 6 hours)');
-
-    // Trigger an immediate initial crawl if requested or on startup
-    if (process.env.RUN_INITIAL_CRAWL === 'true') {
-      logger.info('Triggering initial immediate crawl...');
-      await this.boss.send('crawl-all', { trigger: 'startup' });
-    }
   }
 
   public async stop(): Promise<void> {

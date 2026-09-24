@@ -12,7 +12,7 @@ JobFinder discovers, normalizes, deduplicates, ranks, and tracks internships and
   - *Pass 2 (Paseo / AGY)*: Structured validation extracts eligibility, language, domain and tools without claiming facts that are absent from the posting.
 - **Hybrid Semantic Retrieval**: PostgreSQL 16 with `pgvector` HNSW indexing combining vector cosine similarity ($40\%$) + LLM Fit Score ($40\%$) + User Preference Weights ($20\%$).
 - **Reactive Telegram Bot (`grammY`)**: Long Polling bot (works behind home NAT without public IP/webhooks) featuring two-tier expandable cards, PDF CV upload, and inline application tracking (`[📋 Deep Breakdown]`, `[🔗 Apply Directly]`, `[👍]`, `[👎]`, `[💼 Applied]`).
-- **Resilient Worker (`pg-boss`)**: Background ingestion every 2 hours and staleness cleanup every 6 hours, persisting queues directly in PostgreSQL across laptop reboots/sleep.
+- **On-demand multi-source search**: `/search` queries configured ATS Scrapers sources only when a user asks; pg-boss retains stale-record cleanup every 6 hours.
 - **Observability**: Structured **Pino** logging with automated Telegram admin alerts on unhandled errors.
 
 ---
@@ -25,7 +25,7 @@ packages/
 ├── adapters/    # Greenhouse, Lever, Ashby, Teamtailor, Factorial, Workable parsers
 ├── llm/         # Shared schemas, matcher, bouncer and optional embedding provider
 ├── bot/         # JobFinder grammY bot, Paseo/AGY bridge, CV ingestion and cards
-└── worker/      # pg-boss queue, recurring crawler, match notifier, Pino logger
+└── worker/      # pg-boss cleanup and notification jobs, Pino logger
 ```
 
 ---

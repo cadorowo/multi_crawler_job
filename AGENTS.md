@@ -90,14 +90,14 @@ When running a command, updating a profile, or answering general queries:
 - `scripts/` — One-off utilities (ATS bridge, candidate profile matcher, live crawl tests)
 
 **Data:**
-- Local ATS scraper: `/Users/cadowo/Library/Mobile Documents/com~apple~CloudDocs/Documents/projects/vibes/ats_scraper`
+- Local ATS scraper: `/Users/cadowo/iCloud Drive (Archive)/Documents/projects/vibes/ats_scraper`
 - Datasets: `ux_ui_internships.parquet` (5,264 rows), `ux_ui_internships_erasmus.csv` (391 rows)
 - Extracted jobs: `dashboard/jobs_data.json` (423 clean verified internships)
 
 **User Profile Storage:**
 - Per-user JSON profiles: `packages/bot/src/store/profiles.json`
 - Supports multi-discipline (UX/UI, Graphic Design, Marketing, Engineering, Data, AI/ML, Finance, Operations)
-- Primary user Telegram ID: `159450250` (`@dogo_time`)
+- Admin Telegram ID: Configured via `TELEGRAM_ADMIN_CHAT_ID` in `.env`
 
 ---
 

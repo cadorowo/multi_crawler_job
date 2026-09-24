@@ -7,7 +7,7 @@ dotenv.config({ path: resolve(process.cwd(), '../../.env') });
 dotenv.config();
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID || '159450250';
+const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID || '';
 
 const bot = new Bot(token || 'dummy-token-for-initialization');
 

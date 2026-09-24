@@ -41,14 +41,14 @@ export class AtsScrapersAdapter extends BaseAdapter {
   private readonly bridgePath = resolve(process.cwd(), 'scripts/search_ats_scraper.py');
   private readonly workspace =
     process.env.ATS_SCRAPER_ROOT ||
-    '/Users/cadowo/Library/Mobile Documents/com~apple~CloudDocs/Documents/projects/vibes/ats_scraper';
+    '/Users/cadowo/iCloud Drive (Archive)/Documents/projects/vibes/ats_scraper';
 
   async fetchJobs(target: CompanyAdapterTarget, options?: FetchJobsOptions): Promise<AdapterFetchResult> {
     const startedAt = Date.now();
     const query = target.atsIdentifier || 'intern';
     const limit = options?.limit || 25;
     const location = target.atsApiEndpoint || process.env.ATS_SCRAPER_LOCATION;
-    const records = await this.search(query, limit, location);
+    const records = await this.search(query, limit, location, target.atsDatasetSource);
 
     return {
       company: target,
@@ -98,12 +98,12 @@ export class AtsScrapersAdapter extends BaseAdapter {
     };
   }
 
-  private search(query: string, limit: number, location?: string): Promise<AtsScrapersRecord[]> {
+  private search(query: string, limit: number, location?: string, datasetSource?: string): Promise<AtsScrapersRecord[]> {
     return new Promise((resolveSearch, reject) => {
       const args = ['run', '--directory', this.workspace, 'python', this.bridgePath, '--query', query, '--limit', String(limit)];
       if (location) args.push('--location', location);
       // Query one source by default: a cross-source snapshot is multi-gigabyte.
-      const source = process.env.ATS_SCRAPER_ATS || 'greenhouse';
+      const source = datasetSource || process.env.ATS_SCRAPER_ATS || 'greenhouse';
       if (source) args.push('--ats', source);
       if (process.env.ATS_SCRAPER_REMOTE_ONLY === 'true') args.push('--remote');
       const child = spawn('uv', args);

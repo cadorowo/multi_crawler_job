@@ -76,6 +76,8 @@ export interface CompanyAdapterTarget {
   atsProvider: AtsProvider;
   atsIdentifier: string; // Token, slug, or board identifier in ATS
   atsApiEndpoint?: string;
+  /** Source key in the ats-scrapers hosted dataset, e.g. greenhouse or lever. */
+  atsDatasetSource?: string;
   isBarcelonaHq?: boolean;
 }
 
